@@ -1,0 +1,16 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+# Load the z_backup function definition from your bashrc
+source $HOME/.bashrc
+
+# 1. Get folder name from user via a dialog box
+FOLDER_NAME=$(termux-dialog -i 'Enter folder name (e.g., Documents):' -t 'Termux Backup' | jq -r '.text')
+
+# Check if input was cancelled or empty
+if [ -z "$FOLDER_NAME" ]; then
+    termux-notification --title "Backup Cancelled" --content "No folder name provided."
+    exit 0
+fi
+
+# 2. Call the function defined in .bashrc
+z_backup "$FOLDER_NAME"
