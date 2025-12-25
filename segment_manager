@@ -1,0 +1,3 @@
+#!/bin/bash
+termux-toast "Opening Hashtag Manager (CRUD)"
+python ~/.shortcuts/segment_manager.py
