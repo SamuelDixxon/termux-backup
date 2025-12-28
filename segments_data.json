@@ -19,7 +19,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 1,
+      "counter": 30,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -33,7 +33,7 @@
       "name": "piano",
       "short_desc": "piano playing",
       "full_desc": "piano",
-      "counter": 1,
+      "counter": 3,
       "hashtags": [
         "#piano",
         "#music",
@@ -47,7 +47,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 1,
+      "counter": 53,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -61,7 +61,7 @@
       "name": "skate",
       "short_desc": "longboarding",
       "full_desc": "longboarding",
-      "counter": 1,
+      "counter": 11,
       "hashtags": [
         "#longboarding",
         "#skateboarding",
@@ -75,7 +75,7 @@
       "name": "code",
       "short_desc": "coding education",
       "full_desc": "coding topics and education",
-      "counter": 1,
+      "counter": 5,
       "hashtags": [
         "#coding",
         "#programming",
@@ -89,7 +89,7 @@
       "name": "book review",
       "short_desc": "book reviews",
       "full_desc": "book reviews and education",
-      "counter": 1,
+      "counter": 4,
       "hashtags": [
         "#bookreview",
         "#books",
@@ -131,7 +131,7 @@
       "name": "trixie",
       "short_desc": "cat adventures",
       "full_desc": "cat",
-      "counter": 1,
+      "counter": 4,
       "hashtags": [
         "#cat",
         "#trixie",
@@ -159,7 +159,7 @@
       "name": "dad q&a2",
       "short_desc": "dad q&a",
       "full_desc": "asking my electrical engineering australian dad",
-      "counter": 1,
+      "counter": 4,
       "hashtags": [
         "#qanda",
         "#dadadvice",
@@ -187,7 +187,7 @@
       "name": "hike",
       "short_desc": "hiking adventures",
       "full_desc": "hiking videos",
-      "counter": 1,
+      "counter": 3,
       "hashtags": [
         "#hiking",
         "#outdoors",
@@ -201,7 +201,7 @@
       "name": "cisco",
       "short_desc": "1v1 basketball",
       "full_desc": "1 on 1 with my coworker francisco",
-      "counter": 1,
+      "counter": 5,
       "hashtags": [
         "#basketball",
         "#1on1",
@@ -215,7 +215,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 1,
+      "counter": 24,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -229,7 +229,7 @@
       "name": "tea review",
       "short_desc": "tea tasting",
       "full_desc": "tea reviews",
-      "counter": 1,
+      "counter": 6,
       "hashtags": [
         "#teareview",
         "#tea",
@@ -257,13 +257,41 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 47,
+      "counter": 55,
       "hashtags": [
         "#squats",
         "#pistolsquats",
         "#legs",
         "#calisthenics",
         "#core"
+      ]
+    },
+    {
+      "id": 20,
+      "name": "box",
+      "short_desc": "all things related to boxing",
+      "full_desc": "boxing and things related to fighting",
+      "counter": 6,
+      "hashtags": [
+        "#box",
+        "#punch",
+        "#punching",
+        "#knuckles",
+        "#workout"
+      ]
+    },
+    {
+      "id": 21,
+      "name": "bible",
+      "short_desc": "spanish bible reading",
+      "full_desc": "spanish bible reading daily from bible gagteway",
+      "counter": 2,
+      "hashtags": [
+        "#bible",
+        "#spanish",
+        "#gospel",
+        "#learn",
+        "#grow"
       ]
     }
   ]
