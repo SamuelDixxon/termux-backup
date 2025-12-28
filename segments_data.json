@@ -293,6 +293,19 @@
         "#learn",
         "#grow"
       ]
+    },
+    {
+      "id": 22,
+      "name": "ski",
+      "short_desc": "all types of ski",
+      "full_desc": "this segment for all type of ski",
+      "counter": 4,
+      "hashtags": [
+        "#ski",
+        "#exercise",
+        "#balancemovement",
+        "#adventure"
+      ]
     }
   ]
 }
