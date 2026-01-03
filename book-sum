@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# Standalone Termux Widget Script: Book Summary with Grok (xAI)
+# Updated with your personal key – ready to go!
+
+API_KEY="xai-ViPKe2M2SnwqVP6iEoaJCE39ncBLmAow4PKYu5n8s626dwIFZgCW6StdZvVEIDcwvR6aMmPckeIDB1PO"
+
+# Input dialog
+BOOK_INPUT=$(termux-dialog text \
+  -t "Grok Book Summary 📚" \
+  -i "Enter book title and author
+e.g. Atomic Habits by James Clear
+or 1984 by George Orwell" \
+  | jq -r '.text // empty')
+
+# Cancelled or empty
+if [ -z "$BOOK_INPUT" ] || [ "$BOOK_INPUT" = "null" ]; then
+  termux-toast "Cancelled"
+  exit 0
+fi
+
+# Clean input
+BOOK=$(echo "$BOOK_INPUT" | xargs)
+
+# Loading spinner (compatible with latest Termux-API)
+termux-dialog spinner \
+  -t "Grok is Thinking..." \
+  -v ",,," \
+  -i "Generating insightful summary for:
+$BOOK" &
+SPINNER_PID=$!
+
+# Prompt for Grok – designed to get rich, engaging summaries
+PROMPT="Provide a concise, insightful, and engaging book summary in 250-400 words for the book: $BOOK
+
+Include:
+• Main themes and core ideas
+• Key plot points (avoid major spoilers if it's fiction)
+• Most important lessons or takeaways
+
+Write in clear, natural paragraphs. Feel free to add a touch of wit or unique perspective."
+
+# Call xAI Grok API
+RESPONSE=$(curl -s --connect-timeout 15 --max-time 60 \
+  "https://api.x.ai/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{
+    "model": "grok-beta",
+    "messages": [{"role": "user", "content": "'"$PROMPT"'"}],
+    "temperature": 0.7,
+    "max_tokens": 1000
+  }')
+
+# Kill spinner
+kill $SPINNER_PID 2>/dev/null
+wait $SPINNER_PID 2>/dev/null
+
+# Extract summary
+SUMMARY=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+
+# Error handling
+if [ -z "$SUMMARY" ] || [ "$SUMMARY" = "null" ]; then
+  ERROR_MSG=$(echo "$RESPONSE" | jq -r '.error.message // "Unknown error – check internet connection or API quota"')
+  termux-dialog confirm \
+    -t "Generation Failed" \
+    -i "Could not generate summary.
+
+Reason: $ERROR_MSG
+
+Visit console.x.ai to check your usage/quota." > /dev/null
+  termux-toast "Grok summary failed"
+  exit 1
+fi
+
+# Clean whitespace
+SUMMARY=$(echo "\( SUMMARY" | sed 's/^[ \t]*//;s/[ \t]* \)//')
+
+# Copy to clipboard
+echo "$SUMMARY" | termux-clipboard-set
+
+# Show summary in scrollable dialog
+termux-dialog sheet \
+  -t "Grok Summary Copied! 📋" \
+  -v "Close,Copy Again" \
+  -i "$SUMMARY" > /dev/null
+
+# Success notification
+termux-toast "Grok book summary copied! Ready to paste 🚀"
+
+exit 0
