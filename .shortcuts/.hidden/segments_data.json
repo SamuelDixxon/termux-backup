@@ -1,0 +1,352 @@
+{
+  "segments": [
+    {
+      "id": 1,
+      "name": "boulder",
+      "short_desc": "rock climbing",
+      "full_desc": "rock climbing",
+      "counter": 50,
+      "hashtags": [
+        "#rockclimbing",
+        "#climbing",
+        "#bouldering",
+        "#adventure",
+        "#outdoors"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "skip",
+      "short_desc": "jumprope workout",
+      "full_desc": "jumprope",
+      "counter": 42,
+      "hashtags": [
+        "#jumprope",
+        "#skipping",
+        "#fitness",
+        "#cardio",
+        "#workout"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "piano",
+      "short_desc": "piano playing",
+      "full_desc": "piano",
+      "counter": 3,
+      "hashtags": [
+        "#piano",
+        "#music",
+        "#pianolessons",
+        "#classicalmusic",
+        "#pianoplayer"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "mcp",
+      "short_desc": "ppl workout",
+      "full_desc": "general workout push pull legs split",
+      "counter": 65,
+      "hashtags": [
+        "#pushpulllegs",
+        "#workout",
+        "#fitness",
+        "#gym",
+        "#strengthtraining"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "skate",
+      "short_desc": "longboarding",
+      "full_desc": "longboarding",
+      "counter": 11,
+      "hashtags": [
+        "#longboarding",
+        "#skateboarding",
+        "#skate",
+        "#cruising",
+        "#boardlife"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "code",
+      "short_desc": "coding education",
+      "full_desc": "coding topics and education",
+      "counter": 5,
+      "hashtags": [
+        "#coding",
+        "#programming",
+        "#code",
+        "#learntocode",
+        "#tech"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "book review",
+      "short_desc": "book reviews",
+      "full_desc": "book reviews and education",
+      "counter": 4,
+      "hashtags": [
+        "#bookreview",
+        "#books",
+        "#reading",
+        "#booklover",
+        "#literature"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "food",
+      "short_desc": "food challenges",
+      "full_desc": "food challenges and education",
+      "counter": 1,
+      "hashtags": [
+        "#foodchallenge",
+        "#food",
+        "#cooking",
+        "#eats",
+        "#foodie"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "minecraft",
+      "short_desc": "minecraft builds",
+      "full_desc": "minecraft",
+      "counter": 2,
+      "hashtags": [
+        "#minecraft",
+        "#gaming",
+        "#minecraftbuilds",
+        "#mcpe",
+        "#redstone"
+      ]
+    },
+    {
+      "id": 10,
+      "name": "trixie",
+      "short_desc": "cat adventures",
+      "full_desc": "cat",
+      "counter": 6,
+      "hashtags": [
+        "#cat",
+        "#trixie",
+        "#catsofinstagram",
+        "#pets",
+        "#feline"
+      ]
+    },
+    {
+      "id": 11,
+      "name": "technical",
+      "short_desc": "tech testing",
+      "full_desc": "technical topics like a/b testing, product test engineer at microchip",
+      "counter": 1,
+      "hashtags": [
+        "#abtesting",
+        "#tech",
+        "#engineering",
+        "#producttesting",
+        "#microchip"
+      ]
+    },
+    {
+      "id": 12,
+      "name": "dad q&a",
+      "short_desc": "dad q&a",
+      "full_desc": "asking my electrical engineering australian dad",
+      "counter": 4,
+      "hashtags": [
+        "#qanda",
+        "#dadadvice",
+        "#electricalengineering",
+        "#australia",
+        "#inspiration"
+      ]
+    },
+    {
+      "id": 13,
+      "name": "health",
+      "short_desc": "health tech",
+      "full_desc": "new series but going to focus on health and technology",
+      "counter": 1,
+      "hashtags": [
+        "#health",
+        "#healthtech",
+        "#wellness",
+        "#fitness",
+        "#technology"
+      ]
+    },
+    {
+      "id": 14,
+      "name": "hike",
+      "short_desc": "hiking adventures",
+      "full_desc": "hiking videos",
+      "counter": 3,
+      "hashtags": [
+        "#hiking",
+        "#outdoors",
+        "#adventure",
+        "#trails",
+        "#nature"
+      ]
+    },
+    {
+      "id": 15,
+      "name": "cisco",
+      "short_desc": "1v1 basketball",
+      "full_desc": "1 on 1 with my coworker francisco",
+      "counter": 5,
+      "hashtags": [
+        "#basketball",
+        "#1on1",
+        "#hoops",
+        "#coworker",
+        "#parkinggarage"
+      ]
+    },
+    {
+      "id": 16,
+      "name": "ball",
+      "short_desc": "basketball plays",
+      "full_desc": "general basketball",
+      "counter": 31,
+      "hashtags": [
+        "#basketball",
+        "#ball",
+        "#nba",
+        "#hoops",
+        "#basketballlife"
+      ]
+    },
+    {
+      "id": 17,
+      "name": "tea review",
+      "short_desc": "tea tasting",
+      "full_desc": "tea reviews",
+      "counter": 7,
+      "hashtags": [
+        "#teareview",
+        "#tea",
+        "#tealover",
+        "#teatime",
+        "#herbaltea"
+      ]
+    },
+    {
+      "id": 18,
+      "name": "foos",
+      "short_desc": "foosball games",
+      "full_desc": "foosball",
+      "counter": 1,
+      "hashtags": [
+        "#foosball",
+        "#tablefootball",
+        "#foos",
+        "#gaming",
+        "#tournament"
+      ]
+    },
+    {
+      "id": 19,
+      "name": "pistol",
+      "short_desc": "pistol squats",
+      "full_desc": "pistol squats",
+      "counter": 108,
+      "hashtags": [
+        "#squats",
+        "#pistolsquats",
+        "#legs",
+        "#calisthenics",
+        "#core"
+      ]
+    },
+    {
+      "id": 20,
+      "name": "box",
+      "short_desc": "all things related to boxing",
+      "full_desc": "boxing and things related to fighting",
+      "counter": 16,
+      "hashtags": [
+        "#box",
+        "#punch",
+        "#punching",
+        "#knuckles",
+        "#workout"
+      ]
+    },
+    {
+      "id": 21,
+      "name": "bible",
+      "short_desc": "spanish bible reading",
+      "full_desc": "spanish bible reading daily from bible gagteway",
+      "counter": 3,
+      "hashtags": [
+        "#bible",
+        "#spanish",
+        "#gospel",
+        "#learn",
+        "#grow"
+      ]
+    },
+    {
+      "id": 22,
+      "name": "ski",
+      "short_desc": "all types of ski",
+      "full_desc": "this segment for all type of ski",
+      "counter": 4,
+      "hashtags": [
+        "#ski",
+        "#exercise",
+        "#balancemovement",
+        "#adventure"
+      ]
+    },
+    {
+      "id": 23,
+      "name": "run",
+      "short_desc": "run shorts and series",
+      "full_desc": "small video series docune",
+      "counter": 2,
+      "hashtags": [
+        "#run",
+        "#jog",
+        "#fitness",
+        "#wworkout",
+        "#cardio"
+      ]
+    },
+    {
+      "id": 24,
+      "name": "mcped",
+      "short_desc": "educational gym",
+      "full_desc": "exploration into editing anatomy and educational dgym content",
+      "counter": 18,
+      "hashtags": [
+        "#education",
+        "#gym",
+        "#workout",
+        "#exercise",
+        "#learn"
+      ]
+    },
+    {
+      "id": 25,
+      "name": "auto",
+      "short_desc": "automotive vids",
+      "full_desc": "learning for automotive videos",
+      "counter": 2,
+      "hashtags": [
+        "#automotive",
+        "#car",
+        "#mfix",
+        "#mechanical"
+      ]
+    }
+  ]
+}
