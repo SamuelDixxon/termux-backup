@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 50,
+      "counter": 52,
       "hashtags": [
         "#rockclimbing",
         "#climbing",
@@ -159,7 +159,7 @@
       "name": "dad q&a",
       "short_desc": "dad q&a",
       "full_desc": "asking my electrical engineering australian dad",
-      "counter": 4,
+      "counter": 5,
       "hashtags": [
         "#qanda",
         "#dadadvice",
@@ -215,7 +215,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 31,
+      "counter": 33,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -257,7 +257,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 108,
+      "counter": 110,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -271,7 +271,7 @@
       "name": "box",
       "short_desc": "all things related to boxing",
       "full_desc": "boxing and things related to fighting",
-      "counter": 16,
+      "counter": 17,
       "hashtags": [
         "#box",
         "#punch",
