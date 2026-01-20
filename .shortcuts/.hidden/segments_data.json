@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 52,
+      "counter": 54,
       "hashtags": [
         "#rockclimbing",
         "#climbing",
@@ -47,7 +47,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 66,
+      "counter": 67,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -159,7 +159,7 @@
       "name": "dad q&a",
       "short_desc": "dad q&a",
       "full_desc": "asking my electrical engineering australian dad",
-      "counter": 5,
+      "counter": 6,
       "hashtags": [
         "#qanda",
         "#dadadvice",
