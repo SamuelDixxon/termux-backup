@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 54,
+      "counter": 55,
       "hashtags": [
         "#rockclimbing",
         "#climbing",
@@ -47,7 +47,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 67,
+      "counter": 69,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -215,7 +215,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 33,
+      "counter": 41,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -257,7 +257,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 112,
+      "counter": 169,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -299,7 +299,7 @@
       "name": "ski",
       "short_desc": "all types of ski",
       "full_desc": "this segment for all type of ski",
-      "counter": 4,
+      "counter": 6,
       "hashtags": [
         "#ski",
         "#exercise",
@@ -326,7 +326,7 @@
       "name": "mcped",
       "short_desc": "educational gym",
       "full_desc": "exploration into editing anatomy and educational dgym content",
-      "counter": 18,
+      "counter": 19,
       "hashtags": [
         "#education",
         "#gym",
