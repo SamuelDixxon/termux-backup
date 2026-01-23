@@ -1,16 +1,13 @@
 #!/data/data/com.termux/files/usr/bin/bash
-
-# Load the z_backup function definition from your bashrc
-source $HOME/.bashrc
-
-# 1. Get folder name from user via a dialog box
-FOLDER_NAME=$(termux-dialog -i 'Enter folder name (e.g., Documents):' -t 'Termux Backup' | jq -r '.text')
-
-# Check if input was cancelled or empty
-if [ -z "$FOLDER_NAME" ]; then
-    termux-notification --title "Backup Cancelled" --content "No folder name provided."
-    exit 0
-fi
-
-# 2. Call the function defined in .bashrc
-z_backup "$FOLDER_NAME"
+set -euo pipefail
+S="$HOME/.shortcuts" B="$HOME/.bashrc" D="$HOME/termux-backup" M="Simple backup of ~/.shortcuts (incl .hidden) + .bashrc"
+mkdir -p "$D"
+H="$S/.hidden"
+[ -d "\( H" ] && [ -z " \)(ls -A "$H")" ] && { touch "$H/.gitkeep"; echo "# Ensures git tracks this folder" > "$H/.gitkeep"; }
+cp -rf "$S" "$D/" || { echo "Copy failed"; exit 1; }
+[ -f "$B" ] && cp -f "$B" "$D/" || echo "No .bashrc – skipped"
+cd "$D" || exit 1
+git add -A .
+git status --porcelain | grep -q . && { git commit -m "$M"; echo "→ Committed"; } || echo "No changes"
+git push origin main 2>/dev/null || echo "Push failed (network/auth?)"
+echo "Done → $D" && ls -la "$D"
