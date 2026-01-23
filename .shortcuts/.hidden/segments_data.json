@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 55,
+      "counter": 56,
       "hashtags": [
         "#rockclimbing",
         "#climbing",
@@ -47,7 +47,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 70,
+      "counter": 71,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -103,7 +103,7 @@
       "name": "food",
       "short_desc": "food challenges",
       "full_desc": "food challenges and education",
-      "counter": 1,
+      "counter": 2,
       "hashtags": [
         "#foodchallenge",
         "#food",
@@ -229,7 +229,7 @@
       "name": "tea review",
       "short_desc": "tea tasting",
       "full_desc": "tea reviews",
-      "counter": 7,
+      "counter": 8,
       "hashtags": [
         "#teareview",
         "#tea",
@@ -271,7 +271,7 @@
       "name": "box",
       "short_desc": "all things related to boxing",
       "full_desc": "boxing and things related to fighting",
-      "counter": 17,
+      "counter": 18,
       "hashtags": [
         "#box",
         "#punch",
@@ -299,7 +299,7 @@
       "name": "ski",
       "short_desc": "all types of ski",
       "full_desc": "this segment for all type of ski",
-      "counter": 7,
+      "counter": 8,
       "hashtags": [
         "#ski",
         "#exercise",
@@ -326,7 +326,7 @@
       "name": "mcped",
       "short_desc": "educational gym",
       "full_desc": "exploration into editing anatomy and educational dgym content",
-      "counter": 19,
+      "counter": 20,
       "hashtags": [
         "#education",
         "#gym",
