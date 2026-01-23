@@ -47,7 +47,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 69,
+      "counter": 70,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -61,7 +61,7 @@
       "name": "skate",
       "short_desc": "longboarding",
       "full_desc": "longboarding",
-      "counter": 11,
+      "counter": 12,
       "hashtags": [
         "#longboarding",
         "#skateboarding",
@@ -215,7 +215,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 41,
+      "counter": 42,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -299,7 +299,7 @@
       "name": "ski",
       "short_desc": "all types of ski",
       "full_desc": "this segment for all type of ski",
-      "counter": 6,
+      "counter": 7,
       "hashtags": [
         "#ski",
         "#exercise",
@@ -340,7 +340,7 @@
       "name": "auto",
       "short_desc": "automotive vids",
       "full_desc": "learning for automotive videos",
-      "counter": 2,
+      "counter": 3,
       "hashtags": [
         "#automotive",
         "#car",
