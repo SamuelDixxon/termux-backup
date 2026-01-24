@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 56,
+      "counter": 60,
       "hashtags": [
         "#rockclimbing",
         "#climbing",
@@ -19,7 +19,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 42,
+      "counter": 43,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -173,7 +173,7 @@
       "name": "health",
       "short_desc": "health tech",
       "full_desc": "new series but going to focus on health and technology",
-      "counter": 1,
+      "counter": 2,
       "hashtags": [
         "#health",
         "#healthtech",
