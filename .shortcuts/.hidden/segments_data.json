@@ -5,13 +5,11 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 69,
+      "counter": 70,
       "hashtags": [
-        "#rockclimbing",
-        "#climbing",
-        "#bouldering",
-        "#adventure",
-        "#outdoors"
+        "#boulder",
+        "#climb",
+        "#gym"
       ]
     },
     {
@@ -257,7 +255,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 200,
+      "counter": 210,
       "hashtags": [
         "#squats",
         "#pistolsquats",
