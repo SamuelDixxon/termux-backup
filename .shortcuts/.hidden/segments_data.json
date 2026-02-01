@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 66,
+      "counter": 69,
       "hashtags": [
         "#rockclimbing",
         "#climbing",
@@ -257,7 +257,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 172,
+      "counter": 200,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -271,7 +271,7 @@
       "name": "box",
       "short_desc": "all things related to boxing",
       "full_desc": "boxing and things related to fighting",
-      "counter": 18,
+      "counter": 24,
       "hashtags": [
         "#box",
         "#punch",
@@ -326,7 +326,7 @@
       "name": "mcped",
       "short_desc": "educational gym",
       "full_desc": "exploration into editing anatomy and educational dgym content",
-      "counter": 20,
+      "counter": 21,
       "hashtags": [
         "#education",
         "#gym",
