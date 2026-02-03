@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 70,
+      "counter": 72,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -45,7 +45,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 72,
+      "counter": 73,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -129,7 +129,7 @@
       "name": "trixie",
       "short_desc": "cat adventures",
       "full_desc": "cat",
-      "counter": 6,
+      "counter": 7,
       "hashtags": [
         "#cat",
         "#trixie",
@@ -338,7 +338,7 @@
       "name": "auto",
       "short_desc": "automotive vids",
       "full_desc": "learning for automotive videos",
-      "counter": 3,
+      "counter": 4,
       "hashtags": [
         "#automotive",
         "#car",
