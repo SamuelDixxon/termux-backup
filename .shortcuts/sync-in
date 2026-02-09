@@ -1,0 +1,52 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+# --- Paths ---
+D="$HOME/termux-backup"
+S="$HOME/.shortcuts"
+B="$HOME/.bashrc"
+LOG="$D/sync_history.csv"
+
+# --- 1. Identify Device ---
+DEVICE=$(getprop ro.product.model | tr -d ' ')
+[ -z "$DEVICE" ] && DEVICE=$(hostname)
+echo "📱 Device: $DEVICE"
+
+# --- 2. Git Operations (Inside the Backup Folder only) ---
+echo "🔄 Fetching latest from GitHub..."
+cd "$D"
+git fetch origin main
+
+# Compare the local backup folder to the cloud
+LOCAL_HASH=$(git rev-parse HEAD)
+REMOTE_HASH=$(git rev-parse origin/main)
+
+if [ "$LOCAL_HASH" = "$REMOTE_HASH" ]; then
+    echo "✅ Backup folder is already up to date with Cloud."
+else
+    echo "📥 Cloud is ahead. Updating local backup folder..."
+    git pull origin main
+fi
+
+# --- 3. Sync Backup -> System (Shortcuts/Segments) ---
+echo "📂 Checking for updated scripts..."
+# -u: only copy if source file is newer than the local copy
+# -v: verbose so you can see exactly which scripts updated
+cp -ruvT "$D/.shortcuts/" "$S/"
+
+# --- 4. Sync Backup -> System (.bashrc) ---
+if [ -f "$D/.bashrc" ]; then
+    if [ "$D/.bashrc" -nt "$B" ]; then
+        echo "🆕 Upstream .bashrc is newer. Updating..."
+        cp -f "$D/.bashrc" "$B"
+        echo "💡 Run 'source ~/.bashrc' to apply changes."
+    else
+        echo "✅ Local .bashrc is current."
+    fi
+fi
+
+# --- 5. Log & Backup Log ---
+[ ! -f "$LOG" ] && echo "Timestamp,Device,Action" > "$LOG"
+echo "$(date '+%Y-%m-%d %H:%M:%S'),$DEVICE,PULL_SYNC" >> "$LOG"
+
+echo -e "\n✨ System synced with latest Cloud data."
