@@ -1,0 +1,32 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+S="$HOME/.shortcuts/"
+D="$HOME/termux-backup"
+DS="$D/.shortcuts/"
+DEVICE=$(getprop ro.product.model | tr -d ' ')
+
+echo "📱 Device: $DEVICE"
+
+# 1. Ensure the destination exists
+mkdir -p "$DS"
+
+# 2. Mirror System -> Repo (This is what deletes the junk files)
+# --delete: Removes files in DS that no longer exist in S
+rsync -av --delete --exclude=".git" "$S" "$DS"
+
+# 3. Mirror .bashrc
+[ -f "$HOME/.bashrc" ] && cp -f "$HOME/.bashrc" "$D/.bashrc"
+
+# 4. Capture everything in Git
+cd "$D"
+git add -A .
+
+# 5. Push to GitHub
+if ! git diff-index --quiet HEAD --; then
+    echo "📦 Changes/Deletions detected. Committing..."
+    git commit -m "Sync from $DEVICE: Mirroring deletions & updates"
+    git push origin main
+else
+    echo "✅ No changes to push."
+fi
