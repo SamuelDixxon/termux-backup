@@ -1,44 +1,41 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -euo pipefail
 
+# --- Paths ---
 S="$HOME/.shortcuts"
 B="$HOME/.bashrc"
 D="$HOME/termux-backup"
-M="Simple backup of ~/.shortcuts (incl .hidden) + .bashrc"
+LOG="$D/sync_history.csv"
+DEVICE=$(getprop ro.product.model | tr -d ' ')
 
-# Create the backup directory if it doesn't exist
-mkdir -p "$D"
+echo "🧹 Cleaning up redundant scripts..."
+# Force remove old junk from Git tracking if they exist in the backup folder
+cd "$D"
+git rm -f book-sum backup-shortcuts backup-folder 2>/dev/null || echo "→ Junk already gone from Git index."
 
-# Fix: Corrected the 'if' logic and subshell syntax
+echo "📂 Syncing local system -> Backup folder..."
+mkdir -p "$D/.shortcuts"
+
+# Ensure .hidden exists and has a .gitkeep
 H="$S/.hidden"
 if [ -d "$H" ] && [ -z "$(ls -A "$H" 2>/dev/null)" ]; then
     touch "$H/.gitkeep"
-    echo "# Ensures git tracks this folder" > "$H/.gitkeep"
-    echo "→ Added .gitkeep to empty .hidden"
 fi
 
-echo "Copying ~/.shortcuts → $D ..."
-# We use -T to avoid nesting folders if the script runs twice
-cp -rT "$S" "$D/.shortcuts" || { echo "Copy failed!"; exit 1; }
+# Copy everything to backup folder
+cp -rT "$S" "$D/.shortcuts"
+[ -f "$B" ] && cp -f "$B" "$D/.bashrc"
 
-if [ -f "$B" ]; then
-    cp -f "$B" "$D/" && echo "→ Copied .bashrc"
-else
-    echo "→ No .bashrc – skipped"
-fi
+# --- Log Device Info ---
+[ ! -f "$LOG" ] && echo "Timestamp,Device,Action" > "$LOG"
+echo "$(date '+%Y-%m-%d %H:%M:%S'),$DEVICE,PUSH_BACKUP" >> "$LOG"
 
-cd "$D" || { echo "Cannot cd to $D"; exit 1; }
-
-# Git operations
+# --- Git Push ---
 git add -A .
-
 if ! git diff-index --quiet HEAD --; then
-    git commit -m "$M" && echo "→ Committed"
+    git commit -m "Backup from $DEVICE: System cleanup and segment update"
+    echo "📤 Pushing to GitHub..."
+    git push origin main
 else
-    echo "→ No changes to commit"
+    echo "✅ Everything already backed up."
 fi
-
-git push origin main 2>/dev/null && echo "→ Pushed" || echo "→ Push failed (network/auth?)"
-
-echo -e "\nBackup complete!\nLocation: $D\nContents:"
-ls -la "$D"
