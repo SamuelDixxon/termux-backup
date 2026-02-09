@@ -1,0 +1,44 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+S="$HOME/.shortcuts"
+B="$HOME/.bashrc"
+D="$HOME/termux-backup"
+M="Simple backup of ~/.shortcuts (incl .hidden) + .bashrc"
+
+# Create the backup directory if it doesn't exist
+mkdir -p "$D"
+
+# Fix: Corrected the 'if' logic and subshell syntax
+H="$S/.hidden"
+if [ -d "$H" ] && [ -z "$(ls -A "$H" 2>/dev/null)" ]; then
+    touch "$H/.gitkeep"
+    echo "# Ensures git tracks this folder" > "$H/.gitkeep"
+    echo "→ Added .gitkeep to empty .hidden"
+fi
+
+echo "Copying ~/.shortcuts → $D ..."
+# We use -T to avoid nesting folders if the script runs twice
+cp -rT "$S" "$D/.shortcuts" || { echo "Copy failed!"; exit 1; }
+
+if [ -f "$B" ]; then
+    cp -f "$B" "$D/" && echo "→ Copied .bashrc"
+else
+    echo "→ No .bashrc – skipped"
+fi
+
+cd "$D" || { echo "Cannot cd to $D"; exit 1; }
+
+# Git operations
+git add -A .
+
+if ! git diff-index --quiet HEAD --; then
+    git commit -m "$M" && echo "→ Committed"
+else
+    echo "→ No changes to commit"
+fi
+
+git push origin main 2>/dev/null && echo "→ Pushed" || echo "→ Push failed (network/auth?)"
+
+echo -e "\nBackup complete!\nLocation: $D\nContents:"
+ls -la "$D"
