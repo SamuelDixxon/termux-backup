@@ -29,4 +29,3 @@ Unlike standard backups, this system uses `rsync --delete` to enforce a bidirect
 ### Prerequisites
 ```bash
 pkg install rsync git termux-api python jq
-cat > ~/.shortcuts/README.md << 'EOF'
