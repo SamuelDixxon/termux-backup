@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 76,
+      "counter": 74,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -45,7 +45,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 76,
+      "counter": 75,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -143,7 +143,7 @@
       "name": "technical",
       "short_desc": "tech testing",
       "full_desc": "technical topics like a/b testing, product test engineer at microchip",
-      "counter": 1,
+      "counter": 2,
       "hashtags": [
         "#abtesting",
         "#tech",
@@ -213,7 +213,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 46,
+      "counter": 51,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -255,7 +255,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 235,
+      "counter": 230,
       "hashtags": [
         "#squats",
         "#pistolsquats",
