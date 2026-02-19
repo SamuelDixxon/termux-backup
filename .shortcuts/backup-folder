@@ -1,13 +1,28 @@
 #!/data/data/com.termux/files/usr/bin/bash
-set -euo pipefail
-S="$HOME/.shortcuts" B="$HOME/.bashrc" D="$HOME/termux-backup" M="Simple backup of ~/.shortcuts (incl .hidden) + .bashrc"
-mkdir -p "$D"
-H="$S/.hidden"
-[ -d "\( H" ] && [ -z " \)(ls -A "$H")" ] && { touch "$H/.gitkeep"; echo "# Ensures git tracks this folder" > "$H/.gitkeep"; }
-cp -rf "$S" "$D/" || { echo "Copy failed"; exit 1; }
-[ -f "$B" ] && cp -f "$B" "$D/" || echo "No .bashrc – skipped"
-cd "$D" || exit 1
-git add -A .
-git status --porcelain | grep -q . && { git commit -m "$M"; echo "→ Committed"; } || echo "No changes"
-git push origin main 2>/dev/null || echo "Push failed (network/auth?)"
-echo "Done → $D" && ls -la "$D"
+
+# 1. Gather folders from both main shared and DCIM
+# Excludes system junk and the Export folder itself
+LIST=$(find ~/storage/shared ~/storage/shared/DCIM -maxdepth 1 -type d -not -path '*/.*' | \
+      sed 's|.*/||' | \
+      sort -u | \
+      grep -vE "Export|Android|DCIM|shared" | \
+      tr '\n' ',' | sed 's/,$//')
+
+if [ -z "$LIST" ]; then
+    termux-dialog confirm -t "Error" -i "No folders found. Check permissions."
+    exit 1
+fi
+
+# 2. Show the menu
+SELECTED_JSON=$(termux-dialog radio -t "Select Folder to Zip" -v "$LIST")
+
+# 3. Parse and Execute
+FOLDER_NAME=$(echo "$SELECTED_JSON" | jq -r '.text // empty')
+
+if [ -z "$FOLDER_NAME" ] || [ "$FOLDER_NAME" == "null" ]; then
+    termux-toast "Cancelled"
+    exit 0
+fi
+
+source ~/.bashrc
+z_backup "$FOLDER_NAME"
