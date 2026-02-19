@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 76,
+      "counter": 84,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 44,
+      "counter": 45,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -45,7 +45,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 76,
+      "counter": 79,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -87,7 +87,7 @@
       "name": "book review",
       "short_desc": "book reviews",
       "full_desc": "book reviews and education",
-      "counter": 4,
+      "counter": 9,
       "hashtags": [
         "#bookreview",
         "#books",
@@ -185,7 +185,7 @@
       "name": "hike",
       "short_desc": "hiking adventures",
       "full_desc": "hiking videos",
-      "counter": 3,
+      "counter": 4,
       "hashtags": [
         "#hiking",
         "#outdoors",
@@ -199,7 +199,7 @@
       "name": "cisco",
       "short_desc": "1v1 basketball",
       "full_desc": "1 on 1 with my coworker francisco",
-      "counter": 5,
+      "counter": 7,
       "hashtags": [
         "#basketball",
         "#1on1",
@@ -255,7 +255,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 235,
+      "counter": 276,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -276,20 +276,6 @@
         "#punching",
         "#knuckles",
         "#workout"
-      ]
-    },
-    {
-      "id": 21,
-      "name": "bible",
-      "short_desc": "spanish bible reading",
-      "full_desc": "spanish bible reading daily from bible gagteway",
-      "counter": 3,
-      "hashtags": [
-        "#bible",
-        "#spanish",
-        "#gospel",
-        "#learn",
-        "#grow"
       ]
     },
     {
