@@ -68,8 +68,10 @@ z_restore() {
 alias zb='z_backup'
 alias zr='z_restore'
 
+
 # --- End of Termux Functions ---
 
 alias export='cd /data/data/com.termux/files/home/storage/shared/export'
 alias e='cd /data/data/com.termux/files/home/storage/shared/export'
-alias clip='pwd | termux-clipboard-set'
+alias cpwdp='pwd | termux-clipboard-set'
+alias cfile='termux-clipboard-set <'
