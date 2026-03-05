@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 51,
+      "counter": 52,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -87,7 +87,7 @@
       "name": "book review",
       "short_desc": "book reviews",
       "full_desc": "book reviews and education",
-      "counter": 10,
+      "counter": 12,
       "hashtags": [
         "#bookreview",
         "#books",
@@ -255,7 +255,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 315,
+      "counter": 326,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -269,7 +269,7 @@
       "name": "box",
       "short_desc": "all things related to boxing",
       "full_desc": "boxing and things related to fighting",
-      "counter": 24,
+      "counter": 25,
       "hashtags": [
         "#box",
         "#punch",
