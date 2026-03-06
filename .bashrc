@@ -73,5 +73,6 @@ alias zr='z_restore'
 
 alias export='cd /data/data/com.termux/files/home/storage/shared/export'
 alias e='cd /data/data/com.termux/files/home/storage/shared/export'
-alias cpwdp='pwd | termux-clipboard-set'
+alias cpwd='pwd | termux-clipboard-set'
 alias cfile='termux-clipboard-set <'
+alias ltr='ls -ltr'

@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 93,
+      "counter": 96,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 52,
+      "counter": 54,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -45,7 +45,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 83,
+      "counter": 84,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -87,7 +87,7 @@
       "name": "book review",
       "short_desc": "book reviews",
       "full_desc": "book reviews and education",
-      "counter": 12,
+      "counter": 13,
       "hashtags": [
         "#bookreview",
         "#books",
@@ -185,7 +185,7 @@
       "name": "hike",
       "short_desc": "hiking adventures",
       "full_desc": "hiking videos",
-      "counter": 8,
+      "counter": 6,
       "hashtags": [
         "#hiking",
         "#outdoors",
@@ -213,7 +213,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 46,
+      "counter": 47,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -255,7 +255,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 326,
+      "counter": 331,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -269,7 +269,7 @@
       "name": "box",
       "short_desc": "all things related to boxing",
       "full_desc": "boxing and things related to fighting",
-      "counter": 25,
+      "counter": 26,
       "hashtags": [
         "#box",
         "#punch",
