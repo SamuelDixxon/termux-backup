@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 55,
+      "counter": 56,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -213,7 +213,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 47,
+      "counter": 48,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -255,7 +255,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 338,
+      "counter": 340,
       "hashtags": [
         "#squats",
         "#pistolsquats",
