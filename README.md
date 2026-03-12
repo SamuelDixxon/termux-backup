@@ -159,6 +159,6 @@ termux-backup/
 
 ## 👤 Author
 
-**Samuel Dixon** — Electrical Engineer · Content Creator · [sdixoninvesting@gmail.com](mailto:sdixoninvesting@gmail.com)
+**Samuel Dixon** — Electrical Engineer · [sdixoninvesting@gmail.com](mailto:sdixoninvesting@gmail.com)
 
 [![GitHub](https://img.shields.io/badge/GitHub-SamuelDixxon-181717?style=flat-square&logo=github)](https://github.com/SamuelDixxon)
