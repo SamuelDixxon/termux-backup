@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 97,
+      "counter": 99,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -45,7 +45,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 86,
+      "counter": 87,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -255,7 +255,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 340,
+      "counter": 341,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -269,7 +269,7 @@
       "name": "box",
       "short_desc": "all things related to boxing",
       "full_desc": "boxing and things related to fighting",
-      "counter": 26,
+      "counter": 27,
       "hashtags": [
         "#box",
         "#punch",
