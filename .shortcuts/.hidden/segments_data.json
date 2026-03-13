@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 105,
+      "counter": 107,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 56,
+      "counter": 61,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -296,7 +296,7 @@
       "name": "mcped",
       "short_desc": "educational gym",
       "full_desc": "exploration into editing anatomy and educational dgym content",
-      "counter": 22,
+      "counter": 23,
       "hashtags": [
         "#education",
         "#gym",
