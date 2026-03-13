@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 99,
+      "counter": 105,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -45,7 +45,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 87,
+      "counter": 89,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -237,20 +237,6 @@
       ]
     },
     {
-      "id": 18,
-      "name": "foos",
-      "short_desc": "foosball games",
-      "full_desc": "foosball",
-      "counter": 1,
-      "hashtags": [
-        "#foosball",
-        "#tablefootball",
-        "#foos",
-        "#gaming",
-        "#tournament"
-      ]
-    },
-    {
       "id": 19,
       "name": "pistol",
       "short_desc": "pistol squats",
@@ -310,7 +296,7 @@
       "name": "mcped",
       "short_desc": "educational gym",
       "full_desc": "exploration into editing anatomy and educational dgym content",
-      "counter": 21,
+      "counter": 22,
       "hashtags": [
         "#education",
         "#gym",
