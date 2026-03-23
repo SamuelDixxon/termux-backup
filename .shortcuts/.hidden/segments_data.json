@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 115,
+      "counter": 118,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -59,7 +59,7 @@
       "name": "skate",
       "short_desc": "longboarding",
       "full_desc": "longboarding",
-      "counter": 12,
+      "counter": 13,
       "hashtags": [
         "#longboarding",
         "#skateboarding",
@@ -241,7 +241,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 349,
+      "counter": 352,
       "hashtags": [
         "#squats",
         "#pistolsquats",
