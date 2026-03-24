@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 64,
+      "counter": 65,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -45,7 +45,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 92,
+      "counter": 93,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -241,7 +241,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 352,
+      "counter": 354,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -282,7 +282,7 @@
       "name": "run",
       "short_desc": "run shorts and series",
       "full_desc": "small video series docune",
-      "counter": 3,
+      "counter": 4,
       "hashtags": [
         "#run",
         "#jog",
