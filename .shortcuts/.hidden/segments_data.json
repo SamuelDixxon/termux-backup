@@ -45,7 +45,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 93,
+      "counter": 95,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -73,7 +73,7 @@
       "name": "code",
       "short_desc": "coding education",
       "full_desc": "coding topics and education",
-      "counter": 5,
+      "counter": 6,
       "hashtags": [
         "#coding",
         "#programming",
@@ -241,7 +241,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 354,
+      "counter": 356,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -337,13 +337,11 @@
       "name": "stands",
       "short_desc": "handstands",
       "full_desc": "handstand training and tips series",
-      "counter": 27,
+      "counter": 26,
       "hashtags": [
+        "#calisthenics",
         "#handstand",
-        "#ststability",
-        "#strength",
-        "#balance",
-        "#core"
+        "#gym"
       ]
     }
   ]
