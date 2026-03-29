@@ -45,7 +45,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 95,
+      "counter": 96,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -73,7 +73,7 @@
       "name": "code",
       "short_desc": "coding education",
       "full_desc": "coding topics and education",
-      "counter": 6,
+      "counter": 7,
       "hashtags": [
         "#coding",
         "#programming",
@@ -87,7 +87,7 @@
       "name": "book review",
       "short_desc": "book reviews",
       "full_desc": "book reviews and education",
-      "counter": 13,
+      "counter": 15,
       "hashtags": [
         "#bookreview",
         "#books",

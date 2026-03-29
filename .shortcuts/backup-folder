@@ -25,4 +25,5 @@ if [ -z "$FOLDER_NAME" ] || [ "$FOLDER_NAME" == "null" ]; then
 fi
 
 source ~/.bashrc
+mv ~/storage/shared/DCIM/$FOLDER_NAME ~/storage/shared
 z_backup "$FOLDER_NAME"
