@@ -1,0 +1,295 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# transfer-export — copy ~/storage/shared/Export to an SD card or Raspberry Pi
+#
+# WIRED:   USB-C SD adapter plugged into phone → auto-detects mount point
+# WIRELESS: rsync over SSH to Pi (primary), falls back to FTP if SSH fails
+#
+# ─── ONE-TIME PI SETUP ────────────────────────────────────────────────────────
+# On the Pi, run once:
+#   sudo apt install rsync openssh-server
+#   sudo systemctl enable ssh && sudo systemctl start ssh
+#   # Set a static IP (recommended):
+#   # Edit /etc/dhcpcd.conf and add:
+#   #   interface wlan0
+#   #   static ip_address=192.168.1.XXX/24
+#   #   static routers=192.168.1.1
+#   # Then: sudo systemctl restart dhcpcd
+#
+# For FTP fallback, run on Pi:
+#   sudo apt install vsftpd
+#   sudo systemctl enable vsftpd && sudo systemctl start vsftpd
+#
+# On the phone, install SSH client once:
+#   pkg install openssh ncftp
+#   ssh-keygen -t ed25519          # generate key if you haven't
+#   ssh-copy-id PI_USER@PI_IP      # authorize phone → Pi (no password prompts)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ══ CONFIG — edit these once ══════════════════════════════════════════════════
+PI_USER="sam"                        # your Pi username
+PI_IP="192.168.1.100"               # set your Pi's static IP here
+PI_DEST="/home/sam/sd-archive"      # destination path on Pi
+FTP_PORT=21
+SSH_PORT=22
+SD_LABELS=("SD1-fitness" "SD2-code" "SD3-investing" "SD4-misc")
+# ═════════════════════════════════════════════════════════════════════════════
+
+EXPORT_DIR="$HOME/storage/shared/Export"
+
+# ── ANSI palette ──────────────────────────────────────────────────────────────
+BOLD="\033[1m"; RESET="\033[0m"; GREEN="\033[32m"; YELLOW="\033[33m"
+RED="\033[31m"; CYAN="\033[36m"; GRAY="\033[90m"; DIM="\033[2m"
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+banner() {
+    echo ""
+    echo -e "${BOLD}${CYAN}┌─────────────────────────────────────────┐${RESET}"
+    printf "${BOLD}${CYAN}│  %-43s│${RESET}\n" "$1"
+    echo -e "${BOLD}${CYAN}└─────────────────────────────────────────┘${RESET}"
+    echo ""
+}
+
+ok()   { echo -e "${GREEN}${BOLD}✓ $1${RESET}"; }
+warn() { echo -e "${YELLOW}⚠ $1${RESET}"; }
+fail() { echo -e "${RED}${BOLD}✗ $1${RESET}"; }
+info() { echo -e "${GRAY}  $1${RESET}"; }
+
+# ── Preflight ─────────────────────────────────────────────────────────────────
+clear
+echo -e "${BOLD}"
+echo "  ╔══════════════════════════════════════════╗"
+echo "  ║        EXPORT TRANSFER                   ║"
+echo "  ║  wired (SD card)  or  wireless (Pi)      ║"
+echo "  ╚══════════════════════════════════════════╝"
+echo -e "${RESET}"
+echo -e "${GRAY}  $(date '+%A %b %-d, %Y  %-I:%M %p')${RESET}\n"
+
+if [ ! -d "$EXPORT_DIR" ]; then
+    fail "Export directory not found: $EXPORT_DIR"
+    info "Run backup-folder first to create some zips."
+    exit 1
+fi
+
+EXPORT_COUNT=$(find "$EXPORT_DIR" -maxdepth 1 -name "*.zip" | wc -l)
+info "Export directory: $EXPORT_DIR"
+info "Zip files found: $EXPORT_COUNT"
+echo ""
+
+if [ "$EXPORT_COUNT" -eq 0 ]; then
+    warn "No zip files in Export — nothing to transfer."
+    exit 0
+fi
+
+# ── Step 1: SD label ──────────────────────────────────────────────────────────
+banner "Step 1 / 3 — Select SD card label"
+echo -e "${GRAY}Which SD card are you writing to?${RESET}\n"
+
+for i in "${!SD_LABELS[@]}"; do
+    printf "  ${CYAN}%d.${RESET}  %s\n" "$((i+1))" "${SD_LABELS[$i]}"
+done
+echo ""
+
+SD_CHOICE=""
+while true; do
+    read -rp "$(echo -e "${GRAY}Enter number (1-${#SD_LABELS[@]}): ${RESET}")" SD_CHOICE
+    if [[ "$SD_CHOICE" =~ ^[0-9]+$ ]] && \
+       [ "$SD_CHOICE" -ge 1 ] && \
+       [ "$SD_CHOICE" -le "${#SD_LABELS[@]}" ]; then
+        break
+    fi
+    warn "Invalid choice — enter a number between 1 and ${#SD_LABELS[@]}"
+done
+
+SELECTED_LABEL="${SD_LABELS[$((SD_CHOICE-1))]}"
+ok "Selected: $SELECTED_LABEL"
+
+# ── Step 2: Transfer mode ─────────────────────────────────────────────────────
+banner "Step 2 / 3 — Choose transfer mode"
+echo -e "  ${CYAN}1.${RESET}  Wired  — USB-C SD card adapter"
+echo -e "  ${CYAN}2.${RESET}  Wireless — Raspberry Pi (SSH → FTP fallback)"
+echo ""
+
+MODE_CHOICE=""
+while true; do
+    read -rp "$(echo -e "${GRAY}Enter 1 or 2: ${RESET}")" MODE_CHOICE
+    [[ "$MODE_CHOICE" == "1" || "$MODE_CHOICE" == "2" ]] && break
+    warn "Enter 1 or 2"
+done
+
+# ── Step 3: Execute transfer ──────────────────────────────────────────────────
+banner "Step 3 / 3 — Transferring to $SELECTED_LABEL"
+
+if [ "$MODE_CHOICE" == "1" ]; then
+
+    # ── WIRED PATH ────────────────────────────────────────────────────────────
+    echo -e "${GRAY}Scanning /storage/ for mounted SD cards...${RESET}\n"
+
+    # Find mounted volumes that aren't internal storage (emulated) or system paths
+    MOUNTS=()
+    while IFS= read -r mount_path; do
+        # Skip Android's internal emulated storage
+        [[ "$mount_path" == *"emulated"* ]] && continue
+        [[ "$mount_path" == "/storage/self" ]] && continue
+        MOUNTS+=("$mount_path")
+    done < <(find /storage -maxdepth 1 -mindepth 1 -type d 2>/dev/null)
+
+    if [ "${#MOUNTS[@]}" -eq 0 ]; then
+        fail "No external storage found at /storage/"
+        echo ""
+        echo -e "${YELLOW}Troubleshooting:${RESET}"
+        info "1. Plug in USB-C adapter with SD card inserted"
+        info "2. Android will show a notification — tap 'Allow access'"
+        info "3. Re-run this script"
+        info ""
+        info "If still not found, check with: ls -la /storage/"
+        exit 1
+    fi
+
+    # Show discovered mounts
+    echo -e "${GRAY}Found ${#MOUNTS[@]} external volume(s):${RESET}\n"
+    for i in "${!MOUNTS[@]}"; do
+        AVAIL=$(df -h "${MOUNTS[$i]}" 2>/dev/null | awk 'NR==2{print $4}' || echo "?")
+        printf "  ${CYAN}%d.${RESET}  %s  ${DIM}(%s free)${RESET}\n" \
+               "$((i+1))" "${MOUNTS[$i]}" "$AVAIL"
+    done
+    echo ""
+
+    MOUNT_CHOICE=1
+    if [ "${#MOUNTS[@]}" -gt 1 ]; then
+        while true; do
+            read -rp "$(echo -e "${GRAY}Select volume (1-${#MOUNTS[@]}): ${RESET}")" MOUNT_CHOICE
+            if [[ "$MOUNT_CHOICE" =~ ^[0-9]+$ ]] && \
+               [ "$MOUNT_CHOICE" -ge 1 ] && \
+               [ "$MOUNT_CHOICE" -le "${#MOUNTS[@]}" ]; then
+                break
+            fi
+            warn "Invalid — enter a number between 1 and ${#MOUNTS[@]}"
+        done
+    fi
+
+    SD_MOUNT="${MOUNTS[$((MOUNT_CHOICE-1))]}"
+    SD_TARGET="$SD_MOUNT/$SELECTED_LABEL"
+
+    info "Mount point : $SD_MOUNT"
+    info "Destination : $SD_TARGET"
+    echo ""
+
+    mkdir -p "$SD_TARGET" 2>/dev/null || {
+        fail "Cannot create directory on SD card"
+        info "The card may be read-only or the path is restricted."
+        info "Try: Unplug, reinsert, tap 'Allow' on the Android dialog, retry."
+        exit 1
+    }
+
+    echo -e "${GRAY}Copying with rsync (skips already-transferred files)...${RESET}\n"
+    rsync -av --progress "$EXPORT_DIR/" "$SD_TARGET/"
+    RSYNC_EXIT=$?
+
+    if [ $RSYNC_EXIT -eq 0 ]; then
+        echo ""
+        ok "Wired transfer complete → $SD_TARGET"
+    else
+        fail "rsync exited with code $RSYNC_EXIT"
+        info "Partial transfer may have occurred. Safe to retry — rsync skips existing files."
+        exit 1
+    fi
+
+else
+
+    # ── WIRELESS PATH (SSH → FTP fallback) ────────────────────────────────────
+
+    # Validate config
+    if [ "$PI_IP" == "192.168.1.100" ]; then
+        warn "PI_IP is still the placeholder value (192.168.1.100)"
+        info "Edit the CONFIG block at the top of this script with your Pi's real IP."
+        info "To find it, run on the Pi:  hostname -I"
+        echo ""
+        read -rp "$(echo -e "${GRAY}Enter Pi IP now (or press Enter to abort): ${RESET}")" RUNTIME_IP
+        if [ -z "$RUNTIME_IP" ]; then
+            fail "No IP provided — aborting wireless transfer"
+            exit 1
+        fi
+        PI_IP="$RUNTIME_IP"
+    fi
+
+    REMOTE_TARGET="$PI_DEST/$SELECTED_LABEL"
+
+    # ── Try SSH/rsync first ───────────────────────────────────────────────────
+    echo -e "${GRAY}Attempting SSH connection to ${PI_USER}@${PI_IP}...${RESET}\n"
+
+    # Quick connectivity check (3s timeout)
+    if ssh -o ConnectTimeout=3 \
+           -o BatchMode=yes \
+           -o StrictHostKeyChecking=accept-new \
+           -p "$SSH_PORT" \
+           "${PI_USER}@${PI_IP}" "mkdir -p '$REMOTE_TARGET'" 2>/dev/null; then
+
+        ok "SSH connected"
+        echo -e "${GRAY}Syncing via rsync over SSH (skips existing files)...${RESET}\n"
+
+        rsync -avz --progress \
+              -e "ssh -p $SSH_PORT -o StrictHostKeyChecking=accept-new" \
+              "$EXPORT_DIR/" \
+              "${PI_USER}@${PI_IP}:${REMOTE_TARGET}/"
+        RSYNC_EXIT=$?
+
+        if [ $RSYNC_EXIT -eq 0 ]; then
+            echo ""
+            ok "Wireless transfer complete (SSH) → ${PI_USER}@${PI_IP}:${REMOTE_TARGET}"
+        else
+            fail "rsync over SSH failed (code $RSYNC_EXIT) — trying FTP fallback..."
+            echo ""
+            goto_ftp=true
+        fi
+
+    else
+        warn "SSH unreachable — trying FTP fallback..."
+        echo ""
+        goto_ftp=true
+    fi
+
+    # ── FTP fallback ──────────────────────────────────────────────────────────
+    if [ "${goto_ftp:-false}" == "true" ]; then
+
+        if ! command -v ncftp &>/dev/null; then
+            fail "ncftp not installed (needed for FTP fallback)"
+            info "Install with:  pkg install ncftp"
+            exit 1
+        fi
+
+        echo -e "${GRAY}Connecting via FTP to ${PI_IP}...${RESET}\n"
+        info "You will be prompted for your Pi password."
+        echo ""
+
+        # ncftpput uploads a directory recursively
+        ncftpput -R -v \
+                 -u "$PI_USER" \
+                 -P "$FTP_PORT" \
+                 "$PI_IP" \
+                 "$REMOTE_TARGET" \
+                 "$EXPORT_DIR"
+        FTP_EXIT=$?
+
+        if [ $FTP_EXIT -eq 0 ]; then
+            echo ""
+            ok "Wireless transfer complete (FTP) → ${PI_IP}:${REMOTE_TARGET}"
+        else
+            fail "FTP transfer also failed (code $FTP_EXIT)"
+            info "Check: Pi is powered on, vsftpd is running, IP is correct"
+            info "On Pi: sudo systemctl status vsftpd"
+            exit 1
+        fi
+    fi
+fi
+
+# ── Done ──────────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}${GREEN}"
+echo "  ╔══════════════════════════════════════════╗"
+echo "  ║   ✓  TRANSFER COMPLETE                   ║"
+echo "  ║                                          ║"
+printf "  ║   Label:  %-31s║\n" "$SELECTED_LABEL"
+printf "  ║   Files:  %-31s║\n" "$EXPORT_COUNT zips transferred"
+echo "  ║                                          ║"
+echo "  ╚══════════════════════════════════════════╝"
+echo -e "${RESET}"

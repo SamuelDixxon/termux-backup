@@ -1,0 +1,305 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# batch-backup — zip multiple segment folders in one pass
+#
+# MODES:
+#   batch-backup            — checkbox dialog: pick any segments to backup
+#   batch-backup --all      — zip every segment that has a matching folder
+#   batch-backup --hot      — zip segments with counter >= 50 (high-volume)
+#   batch-backup --unzipped — zip only segments with NO existing zip in Export
+#
+# Exits 0 on full success, 1 if any zip failed (pipeline-safe)
+
+set -eo pipefail
+# NOTE: deliberately NOT using -u (unbound var) because case/loop scope
+# variables need to be safe to reference before assignment in bash 5.x
+
+# ── Paths ──────────────────────────────────────────────────────────────────────
+SHARED="$HOME/storage/shared"
+EXPORT="$SHARED/Export"
+DATA_FILE="$HOME/.shortcuts/.hidden/segments_data.json"
+HOT_THRESHOLD=50
+
+# ── ANSI palette ───────────────────────────────────────────────────────────────
+BOLD="\033[1m"; RESET="\033[0m"; GREEN="\033[32m"; YELLOW="\033[33m"
+RED="\033[31m"; CYAN="\033[36m"; GRAY="\033[90m"; DIM="\033[2m"
+
+# ── Source z_backup ────────────────────────────────────────────────────────────
+source "$HOME/.bashrc" 2>/dev/null
+
+if ! declare -f z_backup >/dev/null 2>&1; then
+    echo -e "${RED}✗ z_backup not found — ensure ~/.bashrc is up to date.${RESET}"
+    exit 1
+fi
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+ok()     { echo -e "  ${GREEN}${BOLD}✓${RESET}  $*"; }
+fail()   { echo -e "  ${RED}${BOLD}✗${RESET}  $*"; }
+warn()   { echo -e "  ${YELLOW}⚠${RESET}  $*"; }
+info()   { echo -e "  ${GRAY}$*${RESET}"; }
+indent() { echo -e "     ${GRAY}$*${RESET}"; }
+
+# ── Parse segments_data.json → parallel arrays SEG_NAMES / SEG_COUNTERS ────────
+parse_segments() {
+    if [ ! -f "$DATA_FILE" ]; then
+        echo -e "${RED}✗ segments_data.json not found: $DATA_FILE${RESET}"
+        exit 1
+    fi
+    mapfile -t SEG_NAMES < <(
+        python3 -c "
+import json
+with open('$DATA_FILE') as f:
+    d = json.load(f)
+for s in sorted(d['segments'], key=lambda x: x['counter'], reverse=True):
+    print(s['name'])
+"
+    )
+    mapfile -t SEG_COUNTERS < <(
+        python3 -c "
+import json
+with open('$DATA_FILE') as f:
+    d = json.load(f)
+for s in sorted(d['segments'], key=lambda x: x['counter'], reverse=True):
+    print(s['counter'])
+"
+    )
+}
+
+# ── Resolve folder basenames for a segment name ────────────────────────────────
+# "mcp" matches shared/mcp, shared/mcp1, shared/mcp2, DCIM/mcp, etc.
+# FIX: guard printf against empty array so no blank entries are emitted
+resolve_folders() {
+    local name="$1"
+    local found=()
+
+    # Exact match in shared/
+    [ -d "$SHARED/$name" ] && found+=("$name")
+
+    # Numbered variants: mcp1, mcp2 …
+    while IFS= read -r -d '' dir; do
+        local base
+        base=$(basename "$dir")
+        [[ "$base" =~ ^${name}[0-9]+$ ]] && found+=("$base")
+    done < <(find "$SHARED" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+
+    # DCIM subfolder (z_backup resolves internally)
+    [ -d "$SHARED/DCIM/$name" ] && found+=("$name")
+
+    # FIX: only print if array is non-empty — prevents blank line entries
+    if [ ${#found[@]} -gt 0 ]; then
+        printf '%s\n' "${found[@]}" | sort -u
+    fi
+}
+
+# ── Check for existing zip in Export/ ─────────────────────────────────────────
+has_zip() {
+    ls "$EXPORT/${1}_"*.zip 2>/dev/null | head -1 | grep -q .
+}
+
+# ── Parity report ──────────────────────────────────────────────────────────────
+parity_report() {
+    echo -e "\n${BOLD}${CYAN}── Parity report ──────────────────────────────────${RESET}\n"
+    local missing_zip=()
+    local missing_folder=()
+    local all_good=()
+    local seg_name seg_count seg_folders any_missing folder
+
+    for i in "${!SEG_NAMES[@]}"; do
+        seg_name="${SEG_NAMES[$i]}"
+        seg_count="${SEG_COUNTERS[$i]}"
+        mapfile -t seg_folders < <(resolve_folders "$seg_name")
+
+        if [ ${#seg_folders[@]} -eq 0 ]; then
+            missing_folder+=("$seg_name ($seg_count×)")
+            continue
+        fi
+
+        any_missing=false
+        for folder in "${seg_folders[@]}"; do
+            if ! has_zip "$folder"; then
+                any_missing=true
+                missing_zip+=("$folder ($seg_count×)")
+            fi
+        done
+        $any_missing || all_good+=("$seg_name")
+    done
+
+    if [ ${#missing_zip[@]} -gt 0 ]; then
+        echo -e "  ${YELLOW}${BOLD}No zip in Export yet:${RESET}"
+        for item in "${missing_zip[@]}"; do
+            echo -e "    ${YELLOW}→${RESET} ${GRAY}$item${RESET}"
+        done
+        echo ""
+    fi
+
+    if [ ${#missing_folder[@]} -gt 0 ]; then
+        echo -e "  ${GRAY}${BOLD}Segment with no folder on device:${RESET}"
+        for item in "${missing_folder[@]}"; do
+            echo -e "    ${GRAY}· $item${RESET}"
+        done
+        echo ""
+    fi
+
+    [ ${#all_good[@]} -gt 0 ] && \
+        echo -e "  ${GREEN}Backed up:${RESET} ${GRAY}${all_good[*]}${RESET}"
+}
+
+# ── Parse segments ─────────────────────────────────────────────────────────────
+MODE="${1:---interactive}"
+parse_segments
+
+# ── Build TARGETS array based on mode ─────────────────────────────────────────
+# FIX: all loop variables are plain (no `local` outside functions)
+declare -a TARGETS=()
+declare -a AVAILABLE=()
+declare -a AVAILABLE_LABELS=()
+seg_name=""; seg_count=""; seg_folders=(); zip_marker=""
+
+case "$MODE" in
+
+    --all)
+        for seg_name in "${SEG_NAMES[@]}"; do
+            mapfile -t seg_folders < <(resolve_folders "$seg_name")
+            for f in "${seg_folders[@]}"; do
+                [ -n "$f" ] && TARGETS+=("$f")
+            done
+        done
+        ;;
+
+    --hot)
+        for i in "${!SEG_NAMES[@]}"; do
+            seg_name="${SEG_NAMES[$i]}"
+            seg_count="${SEG_COUNTERS[$i]}"
+            if [ "$seg_count" -ge "$HOT_THRESHOLD" ]; then
+                mapfile -t seg_folders < <(resolve_folders "$seg_name")
+                for f in "${seg_folders[@]}"; do
+                    [ -n "$f" ] && TARGETS+=("$f")
+                done
+            fi
+        done
+        ;;
+
+    --unzipped)
+        for seg_name in "${SEG_NAMES[@]}"; do
+            mapfile -t seg_folders < <(resolve_folders "$seg_name")
+            for f in "${seg_folders[@]}"; do
+                [ -n "$f" ] && ! has_zip "$f" && TARGETS+=("$f")
+            done
+        done
+        ;;
+
+    *)
+        # Interactive checkbox — FIX: zip_marker is plain var, no `local`
+        for i in "${!SEG_NAMES[@]}"; do
+            seg_name="${SEG_NAMES[$i]}"
+            seg_count="${SEG_COUNTERS[$i]}"
+            mapfile -t seg_folders < <(resolve_folders "$seg_name")
+            for f in "${seg_folders[@]}"; do
+                [ -z "$f" ] && continue
+                zip_marker=""
+                has_zip "$f" && zip_marker=" ✓"
+                AVAILABLE+=("$f")
+                AVAILABLE_LABELS+=("${f} (${seg_count}×)${zip_marker}")
+            done
+        done
+
+        if [ ${#AVAILABLE[@]} -eq 0 ]; then
+            echo -e "${YELLOW}No segment folders found in storage/shared/.${RESET}"
+            echo -e "${GRAY}Create folders matching your segment names first.${RESET}"
+            exit 0
+        fi
+
+        # FIX: CHECKLIST is plain var, no `local`
+        CHECKLIST=$(printf '%s,' "${AVAILABLE_LABELS[@]}" | sed 's/,$//')
+
+        SELECTED_JSON=$(termux-dialog checkbox \
+            -t "Select folders to zip (✓ = already backed up)" \
+            -v "$CHECKLIST")
+
+        INDICES=$(echo "$SELECTED_JSON" | jq -r '.index // empty')
+
+        if [ -z "$INDICES" ] || [ "$INDICES" = "null" ]; then
+            termux-toast "Cancelled"
+            exit 0
+        fi
+
+        IFS=',' read -ra IDX_ARR <<< "$INDICES"
+        for idx in "${IDX_ARR[@]}"; do
+            TARGETS+=("${AVAILABLE[$idx]}")
+        done
+        ;;
+esac
+
+# ── Deduplicate — FIX: guard against empty TARGETS before printf ───────────────
+if [ ${#TARGETS[@]} -gt 0 ]; then
+    mapfile -t TARGETS < <(printf '%s\n' "${TARGETS[@]}" | grep -v '^$' | sort -u)
+fi
+
+# ── Header ─────────────────────────────────────────────────────────────────────
+clear
+echo -e "${BOLD}"
+echo "  ╔══════════════════════════════════════════╗"
+echo "  ║        BATCH BACKUP                      ║"
+echo "  ╚══════════════════════════════════════════╝"
+echo -e "${RESET}"
+echo -e "${GRAY}  $(date '+%A %b %-d, %Y  %-I:%M %p')${RESET}"
+echo -e "${GRAY}  Mode: ${MODE}  |  Targets: ${#TARGETS[@]} folder(s)${RESET}\n"
+
+if [ ${#TARGETS[@]} -eq 0 ]; then
+    warn "No folders matched the selected mode — nothing to zip."
+    parity_report
+    exit 0
+fi
+
+echo -e "${GRAY}  Folders queued:${RESET}"
+for t in "${TARGETS[@]}"; do
+    zip_marker=""
+    has_zip "$t" && zip_marker="${DIM} (overwrites existing zip)${RESET}"
+    echo -e "    ${CYAN}·${RESET} ${t}${zip_marker}"
+done
+echo ""
+
+# ── Zip loop ───────────────────────────────────────────────────────────────────
+PASS=0; FAIL=0
+declare -a FAILED_FOLDERS=()
+
+for folder in "${TARGETS[@]}"; do
+    # Safety: skip any blank entries that slipped through
+    [ -z "$folder" ] && continue
+    echo -e "${GRAY}  zipping ${folder}...${RESET}"
+    if z_backup "$folder"; then
+        ok "$folder"
+        ((PASS++)) || true
+    else
+        fail "$folder"
+        FAILED_FOLDERS+=("$folder")
+        ((FAIL++)) || true
+    fi
+done
+
+# ── Summary ────────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}${CYAN}── Summary ─────────────────────────────────────────${RESET}"
+echo -e "  ${GREEN}✓ Succeeded: ${PASS}${RESET}"
+if [ "$FAIL" -gt 0 ]; then
+    echo -e "  ${RED}✗ Failed:    ${FAIL}${RESET}"
+    for f in "${FAILED_FOLDERS[@]}"; do indent "→ $f"; done
+fi
+
+parity_report
+
+echo ""
+if [ "$FAIL" -eq 0 ]; then
+    echo -e "${BOLD}${GREEN}"
+    echo "  ╔══════════════════════════════════════════╗"
+    printf "  ║   ✓  %d zip(s) written to Export/%-9s║\n" "$PASS" ""
+    echo "  ╚══════════════════════════════════════════╝"
+    echo -e "${RESET}"
+    exit 0
+else
+    echo -e "${BOLD}${YELLOW}"
+    echo "  ╔══════════════════════════════════════════╗"
+    printf "  ║   ⚠  %d ok, %d failed — check above%-6s║\n" "$PASS" "$FAIL" ""
+    echo "  ╚══════════════════════════════════════════╝"
+    echo -e "${RESET}"
+    exit 1
+fi
