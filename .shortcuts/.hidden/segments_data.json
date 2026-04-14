@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 125,
+      "counter": 127,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 68,
+      "counter": 69,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -45,7 +45,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 100,
+      "counter": 101,
       "hashtags": [
         "#pushpulllegs",
         "#workout",

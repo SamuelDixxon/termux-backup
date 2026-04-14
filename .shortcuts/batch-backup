@@ -1,11 +1,11 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# batch-backup — zip multiple segment folders in one pass
+# batch-backup - zip multiple segment folders in one pass
 #
 # MODES:
-#   batch-backup            — checkbox dialog: pick any segments to backup
-#   batch-backup --all      — zip every segment that has a matching folder
-#   batch-backup --hot      — zip segments with counter >= 50 (high-volume)
-#   batch-backup --unzipped — zip only segments with NO existing zip in Export
+#   batch-backup            - checkbox dialog: pick any segments to backup
+#   batch-backup --all      - zip every segment that has a matching folder
+#   batch-backup --hot      - zip segments with counter >= 50 (high-volume)
+#   batch-backup --unzipped - zip only segments with NO existing zip in Export
 #
 # Exits 0 on full success, 1 if any zip failed (pipeline-safe)
 
@@ -13,35 +13,63 @@ set -eo pipefail
 # NOTE: deliberately NOT using -u (unbound var) because case/loop scope
 # variables need to be safe to reference before assignment in bash 5.x
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
+# -- Paths ----------------------------------------------------------------------
 SHARED="$HOME/storage/shared"
 EXPORT="$SHARED/Export"
 DATA_FILE="$HOME/.shortcuts/.hidden/segments_data.json"
 HOT_THRESHOLD=50
 
-# ── ANSI palette ───────────────────────────────────────────────────────────────
+# -- ANSI palette ---------------------------------------------------------------
 BOLD="\033[1m"; RESET="\033[0m"; GREEN="\033[32m"; YELLOW="\033[33m"
 RED="\033[31m"; CYAN="\033[36m"; GRAY="\033[90m"; DIM="\033[2m"
 
-# ── Source z_backup ────────────────────────────────────────────────────────────
+# -- Dependency preflight -------------------------------------------------------
+# Catches missing packages before the loop starts - avoids mid-run failures
+preflight() {
+    local missing=()
+    local pkg bin
+
+    declare -A DEPS=(
+        ["zip"]="/data/data/com.termux/files/usr/bin/zip"
+        ["python3"]="/data/data/com.termux/files/usr/bin/python3"
+        ["jq"]="/data/data/com.termux/files/usr/bin/jq"
+        ["termux-dialog"]="/data/data/com.termux/files/usr/bin/termux-dialog"
+    )
+
+    for pkg in "${!DEPS[@]}"; do
+        bin="${DEPS[$pkg]}"
+        if [ ! -x "$bin" ] && ! command -v "$pkg" >/dev/null 2>&1; then
+            missing+=("$pkg")
+        fi
+    done
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo -e "${RED}${BOLD}x Missing packages - install before running:${RESET}"
+        echo -e "${YELLOW}  pkg install ${missing[*]}${RESET}"
+        exit 1
+    fi
+}
+
+# -- Source z_backup ------------------------------------------------------------
 source "$HOME/.bashrc" 2>/dev/null
+preflight
 
 if ! declare -f z_backup >/dev/null 2>&1; then
-    echo -e "${RED}✗ z_backup not found — ensure ~/.bashrc is up to date.${RESET}"
+    echo -e "${RED}x z_backup not found - ensure ~/.bashrc is up to date.${RESET}"
     exit 1
 fi
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
-ok()     { echo -e "  ${GREEN}${BOLD}✓${RESET}  $*"; }
-fail()   { echo -e "  ${RED}${BOLD}✗${RESET}  $*"; }
-warn()   { echo -e "  ${YELLOW}⚠${RESET}  $*"; }
+# -- Helpers --------------------------------------------------------------------
+ok()     { echo -e "  ${GREEN}${BOLD}v${RESET}  $*"; }
+fail()   { echo -e "  ${RED}${BOLD}x${RESET}  $*"; }
+warn()   { echo -e "  ${YELLOW}!${RESET}  $*"; }
 info()   { echo -e "  ${GRAY}$*${RESET}"; }
 indent() { echo -e "     ${GRAY}$*${RESET}"; }
 
-# ── Parse segments_data.json → parallel arrays SEG_NAMES / SEG_COUNTERS ────────
+# -- Parse segments_data.json -> parallel arrays SEG_NAMES / SEG_COUNTERS --------
 parse_segments() {
     if [ ! -f "$DATA_FILE" ]; then
-        echo -e "${RED}✗ segments_data.json not found: $DATA_FILE${RESET}"
+        echo -e "${RED}x segments_data.json not found: $DATA_FILE${RESET}"
         exit 1
     fi
     mapfile -t SEG_NAMES < <(
@@ -64,40 +92,67 @@ for s in sorted(d['segments'], key=lambda x: x['counter'], reverse=True):
     )
 }
 
-# ── Resolve folder basenames for a segment name ────────────────────────────────
-# "mcp" matches shared/mcp, shared/mcp1, shared/mcp2, DCIM/mcp, etc.
+# -- Resolve folder basenames for a segment name --------------------------------
+# Matching strategy (in order):
+#   1. Exact match:          shared/pistol     -> segment "pistol"
+#   2. Digit suffix:         shared/mcp96      -> segment "mcp"
+#   3. Separator variants:   shared/hike4      -> segment "hike"  (digit after name)
+#   4. Short alias:          shared/m81        -> segment "mcp"   (first char + digits)
+#
+# NOTE: short alias (m81->mcp) uses first-letter match + digits only, to avoid
+# false positives. "m" matches "mcp", "mcped" etc. - we take the SHORTEST
+# segment name that starts with the same letter when a short alias is detected.
+#
 # FIX: guard printf against empty array so no blank entries are emitted
 resolve_folders() {
     local name="$1"
     local found=()
+    local base dir
 
     # Exact match in shared/
     [ -d "$SHARED/$name" ] && found+=("$name")
 
-    # Numbered variants: mcp1, mcp2 …
+    # Scan all dirs in shared/ for variants
     while IFS= read -r -d '' dir; do
-        local base
         base=$(basename "$dir")
-        [[ "$base" =~ ^${name}[0-9]+$ ]] && found+=("$base")
+        [ "$base" = "$name" ] && continue  # already added above
+
+        # Strategy 2 & 3: name followed by digits (mcp96, hike4, skip2)
+        if [[ "$base" =~ ^${name}[0-9]+$ ]]; then
+            found+=("$base")
+            continue
+        fi
+
+        # Strategy 4: short alias - single letter + digits maps to segment
+        # e.g. m81, m90, m99 -> try to match against segment name starting with same letter
+        if [[ "$base" =~ ^[a-z][0-9]+$ ]]; then
+            local first_char="${base:0:1}"
+            local seg_first="${name:0:1}"
+            if [ "$first_char" = "$seg_first" ] && [ ${#name} -le 4 ]; then
+                # Only match short segments (mcp=3, not mcped=5) to avoid ambiguity
+                found+=("$base")
+            fi
+        fi
+
     done < <(find "$SHARED" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
 
     # DCIM subfolder (z_backup resolves internally)
     [ -d "$SHARED/DCIM/$name" ] && found+=("$name")
 
-    # FIX: only print if array is non-empty — prevents blank line entries
+    # Only print if array is non-empty - prevents blank line entries
     if [ ${#found[@]} -gt 0 ]; then
         printf '%s\n' "${found[@]}" | sort -u
     fi
 }
 
-# ── Check for existing zip in Export/ ─────────────────────────────────────────
+# -- Check for existing zip in Export/ -----------------------------------------
 has_zip() {
     ls "$EXPORT/${1}_"*.zip 2>/dev/null | head -1 | grep -q .
 }
 
-# ── Parity report ──────────────────────────────────────────────────────────────
+# -- Parity report --------------------------------------------------------------
 parity_report() {
-    echo -e "\n${BOLD}${CYAN}── Parity report ──────────────────────────────────${RESET}\n"
+    echo -e "\n${BOLD}${CYAN}-- Parity report ----------------------------------${RESET}\n"
     local missing_zip=()
     local missing_folder=()
     local all_good=()
@@ -109,7 +164,7 @@ parity_report() {
         mapfile -t seg_folders < <(resolve_folders "$seg_name")
 
         if [ ${#seg_folders[@]} -eq 0 ]; then
-            missing_folder+=("$seg_name ($seg_count×)")
+            missing_folder+=("$seg_name ($seg_countx)")
             continue
         fi
 
@@ -117,7 +172,7 @@ parity_report() {
         for folder in "${seg_folders[@]}"; do
             if ! has_zip "$folder"; then
                 any_missing=true
-                missing_zip+=("$folder ($seg_count×)")
+                missing_zip+=("$folder ($seg_countx)")
             fi
         done
         $any_missing || all_good+=("$seg_name")
@@ -126,7 +181,7 @@ parity_report() {
     if [ ${#missing_zip[@]} -gt 0 ]; then
         echo -e "  ${YELLOW}${BOLD}No zip in Export yet:${RESET}"
         for item in "${missing_zip[@]}"; do
-            echo -e "    ${YELLOW}→${RESET} ${GRAY}$item${RESET}"
+            echo -e "    ${YELLOW}->${RESET} ${GRAY}$item${RESET}"
         done
         echo ""
     fi
@@ -134,7 +189,7 @@ parity_report() {
     if [ ${#missing_folder[@]} -gt 0 ]; then
         echo -e "  ${GRAY}${BOLD}Segment with no folder on device:${RESET}"
         for item in "${missing_folder[@]}"; do
-            echo -e "    ${GRAY}· $item${RESET}"
+            echo -e "    ${GRAY}. $item${RESET}"
         done
         echo ""
     fi
@@ -143,11 +198,11 @@ parity_report() {
         echo -e "  ${GREEN}Backed up:${RESET} ${GRAY}${all_good[*]}${RESET}"
 }
 
-# ── Parse segments ─────────────────────────────────────────────────────────────
+# -- Parse segments -------------------------------------------------------------
 MODE="${1:---interactive}"
 parse_segments
 
-# ── Build TARGETS array based on mode ─────────────────────────────────────────
+# -- Build TARGETS array based on mode -----------------------------------------
 # FIX: all loop variables are plain (no `local` outside functions)
 declare -a TARGETS=()
 declare -a AVAILABLE=()
@@ -188,7 +243,7 @@ case "$MODE" in
         ;;
 
     *)
-        # Interactive checkbox — FIX: zip_marker is plain var, no `local`
+        # Interactive checkbox - FIX: zip_marker is plain var, no `local`
         for i in "${!SEG_NAMES[@]}"; do
             seg_name="${SEG_NAMES[$i]}"
             seg_count="${SEG_COUNTERS[$i]}"
@@ -196,9 +251,9 @@ case "$MODE" in
             for f in "${seg_folders[@]}"; do
                 [ -z "$f" ] && continue
                 zip_marker=""
-                has_zip "$f" && zip_marker=" ✓"
+                has_zip "$f" && zip_marker=" v"
                 AVAILABLE+=("$f")
-                AVAILABLE_LABELS+=("${f} (${seg_count}×)${zip_marker}")
+                AVAILABLE_LABELS+=("${f} (${seg_count}x)${zip_marker}")
             done
         done
 
@@ -212,7 +267,7 @@ case "$MODE" in
         CHECKLIST=$(printf '%s,' "${AVAILABLE_LABELS[@]}" | sed 's/,$//')
 
         SELECTED_JSON=$(termux-dialog checkbox \
-            -t "Select folders to zip (✓ = already backed up)" \
+            -t "Select folders to zip (v = already backed up)" \
             -v "$CHECKLIST")
 
         INDICES=$(echo "$SELECTED_JSON" | jq -r '.index // empty')
@@ -229,23 +284,23 @@ case "$MODE" in
         ;;
 esac
 
-# ── Deduplicate — FIX: guard against empty TARGETS before printf ───────────────
+# -- Deduplicate - FIX: guard against empty TARGETS before printf ---------------
 if [ ${#TARGETS[@]} -gt 0 ]; then
     mapfile -t TARGETS < <(printf '%s\n' "${TARGETS[@]}" | grep -v '^$' | sort -u)
 fi
 
-# ── Header ─────────────────────────────────────────────────────────────────────
+# -- Header ---------------------------------------------------------------------
 clear
 echo -e "${BOLD}"
-echo "  ╔══════════════════════════════════════════╗"
-echo "  ║        BATCH BACKUP                      ║"
-echo "  ╚══════════════════════════════════════════╝"
+echo "  +==========================================+"
+echo "  |        BATCH BACKUP                      |"
+echo "  +==========================================+"
 echo -e "${RESET}"
 echo -e "${GRAY}  $(date '+%A %b %-d, %Y  %-I:%M %p')${RESET}"
 echo -e "${GRAY}  Mode: ${MODE}  |  Targets: ${#TARGETS[@]} folder(s)${RESET}\n"
 
 if [ ${#TARGETS[@]} -eq 0 ]; then
-    warn "No folders matched the selected mode — nothing to zip."
+    warn "No folders matched the selected mode - nothing to zip."
     parity_report
     exit 0
 fi
@@ -254,11 +309,11 @@ echo -e "${GRAY}  Folders queued:${RESET}"
 for t in "${TARGETS[@]}"; do
     zip_marker=""
     has_zip "$t" && zip_marker="${DIM} (overwrites existing zip)${RESET}"
-    echo -e "    ${CYAN}·${RESET} ${t}${zip_marker}"
+    echo -e "    ${CYAN}.${RESET} ${t}${zip_marker}"
 done
 echo ""
 
-# ── Zip loop ───────────────────────────────────────────────────────────────────
+# -- Zip loop -------------------------------------------------------------------
 PASS=0; FAIL=0
 declare -a FAILED_FOLDERS=()
 
@@ -276,13 +331,13 @@ for folder in "${TARGETS[@]}"; do
     fi
 done
 
-# ── Summary ────────────────────────────────────────────────────────────────────
+# -- Summary --------------------------------------------------------------------
 echo ""
-echo -e "${BOLD}${CYAN}── Summary ─────────────────────────────────────────${RESET}"
-echo -e "  ${GREEN}✓ Succeeded: ${PASS}${RESET}"
+echo -e "${BOLD}${CYAN}-- Summary -----------------------------------------${RESET}"
+echo -e "  ${GREEN}v Succeeded: ${PASS}${RESET}"
 if [ "$FAIL" -gt 0 ]; then
-    echo -e "  ${RED}✗ Failed:    ${FAIL}${RESET}"
-    for f in "${FAILED_FOLDERS[@]}"; do indent "→ $f"; done
+    echo -e "  ${RED}x Failed:    ${FAIL}${RESET}"
+    for f in "${FAILED_FOLDERS[@]}"; do indent "-> $f"; done
 fi
 
 parity_report
@@ -290,16 +345,16 @@ parity_report
 echo ""
 if [ "$FAIL" -eq 0 ]; then
     echo -e "${BOLD}${GREEN}"
-    echo "  ╔══════════════════════════════════════════╗"
-    printf "  ║   ✓  %d zip(s) written to Export/%-9s║\n" "$PASS" ""
-    echo "  ╚══════════════════════════════════════════╝"
+    echo "  +==========================================+"
+    printf "  |   v  %d zip(s) written to Export/%-9s|\n" "$PASS" ""
+    echo "  +==========================================+"
     echo -e "${RESET}"
     exit 0
 else
     echo -e "${BOLD}${YELLOW}"
-    echo "  ╔══════════════════════════════════════════╗"
-    printf "  ║   ⚠  %d ok, %d failed — check above%-6s║\n" "$PASS" "$FAIL" ""
-    echo "  ╚══════════════════════════════════════════╝"
+    echo "  +==========================================+"
+    printf "  |   !  %d ok, %d failed - check above%-6s|\n" "$PASS" "$FAIL" ""
+    echo "  +==========================================+"
     echo -e "${RESET}"
     exit 1
 fi

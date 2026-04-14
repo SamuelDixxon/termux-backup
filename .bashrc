@@ -27,19 +27,34 @@ z_backup() {
     # 2. Ensure canonical Export dir exists (absolute path — never relative)
     mkdir -p "$export_dir" || { echo "✗ FAILED: Could not create Export dir"; return 1; }
 
-    # 3. Zip contents into Export using absolute zip path
+    # 3. Check folder has something to zip
+    local item_count
+    item_count=$(find "$src" -mindepth 1 -maxdepth 3 | head -1 | wc -l)
+    if [ "$item_count" -eq 0 ]; then
+        echo "⚠ SKIPPED: '$folder' is empty — nothing to zip"
+        return 0
+    fi
+
+    # 4. Zip recursively using absolute zip path.
+    #    FIXED: was 'zip * ' which fails on empty dirs, skips subfolders,
+    #    and errors on filenames with spaces. Now uses 'zip -r . ' from
+    #    inside the folder — captures everything regardless of filename.
     local timestamp
     timestamp=$(date +%Y%m%d-%H%M)
     local zip_path="$export_dir/${folder}_${timestamp}.zip"
 
     cd "$src" || { echo "✗ FAILED: Could not cd into $src"; return 1; }
-    zip -9 "$zip_path" * >/dev/null 2>&1
+    zip -9 -r "$zip_path" . >/dev/null 2>&1
+    local zip_exit=$?
 
-    # 4. Report result
-    if [ $? -eq 0 ]; then
-        echo "✓ BACKED UP → Export/${folder}_${timestamp}.zip"
+    # 5. Report result
+    if [ $zip_exit -eq 0 ]; then
+        local zip_size
+        zip_size=$(du -sh "$zip_path" 2>/dev/null | cut -f1)
+        echo "✓ BACKED UP → Export/${folder}_${timestamp}.zip (${zip_size})"
     else
-        echo "✗ FAILED: Zip operation failed for $folder"
+        echo "✗ FAILED: Zip operation failed for $folder (exit $zip_exit)"
+        rm -f "$zip_path" 2>/dev/null
         return 1
     fi
 }

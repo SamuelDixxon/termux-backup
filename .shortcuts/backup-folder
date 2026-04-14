@@ -1,12 +1,21 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# 1. Gather folders from both main shared and DCIM
-# Excludes system junk and the Export folder itself
-LIST=$(find ~/storage/shared ~/storage/shared/DCIM -maxdepth 1 -type d -not -path '*/.*' | \
-      sed 's|.*/||' | \
-      sort -u | \
-      grep -vE "Export|Android|DCIM|shared" | \
-      tr '\n' ',' | sed 's/,$//')
+# 1. Gather folders from shared/ and DCIM/ — preserve DCIM subfolder names
+#    so z_backup can resolve them correctly.
+#    Excludes system noise and the Export folder itself.
+LIST=$(
+  {
+    # Top-level folders in shared/ (excludes DCIM, Android, Export, hidden)
+    find ~/storage/shared -maxdepth 1 -type d -not -path '*/.*' |
+      sed 's|.*/||' |
+      grep -vE "^(Export|Android|DCIM|shared)$"
+
+    # Subfolders of DCIM/ (e.g. Camera, Screenshots) — bare names
+    find ~/storage/shared/DCIM -maxdepth 1 -mindepth 1 -type d -not -path '*/.*' |
+      sed 's|.*/||' |
+      grep -vE "^(Export|Android)$"
+  } | sort -u | tr '\n' ',' | sed 's/,$//'
+)
 
 if [ -z "$LIST" ]; then
     termux-dialog confirm -t "Error" -i "No folders found. Check permissions."
@@ -25,5 +34,4 @@ if [ -z "$FOLDER_NAME" ] || [ "$FOLDER_NAME" == "null" ]; then
 fi
 
 source ~/.bashrc
-mv ~/storage/shared/DCIM/$FOLDER_NAME ~/storage/shared
 z_backup "$FOLDER_NAME"

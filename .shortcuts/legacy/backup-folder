@@ -1,0 +1,29 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+# 1. Gather folders from both main shared and DCIM
+# Excludes system junk and the Export folder itself
+LIST=$(find ~/storage/shared ~/storage/shared/DCIM -maxdepth 1 -type d -not -path '*/.*' | \
+      sed 's|.*/||' | \
+      sort -u | \
+      grep -vE "Export|Android|DCIM|shared" | \
+      tr '\n' ',' | sed 's/,$//')
+
+if [ -z "$LIST" ]; then
+    termux-dialog confirm -t "Error" -i "No folders found. Check permissions."
+    exit 1
+fi
+
+# 2. Show the menu
+SELECTED_JSON=$(termux-dialog radio -t "Select Folder to Zip" -v "$LIST")
+
+# 3. Parse and Execute
+FOLDER_NAME=$(echo "$SELECTED_JSON" | jq -r '.text // empty')
+
+if [ -z "$FOLDER_NAME" ] || [ "$FOLDER_NAME" == "null" ]; then
+    termux-toast "Cancelled"
+    exit 0
+fi
+
+source ~/.bashrc
+mv ~/storage/shared/DCIM/$FOLDER_NAME ~/storage/shared
+z_backup "$FOLDER_NAME"
