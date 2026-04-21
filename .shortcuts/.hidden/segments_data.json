@@ -5,7 +5,7 @@
       "name": "boulder",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 127,
+      "counter": 140,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -45,7 +45,7 @@
       "name": "mcp",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 101,
+      "counter": 105,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -87,7 +87,7 @@
       "name": "book review",
       "short_desc": "book reviews",
       "full_desc": "book reviews and education",
-      "counter": 15,
+      "counter": 18,
       "hashtags": [
         "#bookreview",
         "#books",
@@ -213,7 +213,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 48,
+      "counter": 51,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -241,7 +241,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 378,
+      "counter": 393,
       "hashtags": [
         "#squats",
         "#pistolsquats",
