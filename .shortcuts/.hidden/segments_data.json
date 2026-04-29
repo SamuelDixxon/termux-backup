@@ -2,10 +2,10 @@
   "segments": [
     {
       "id": 1,
-      "name": "boulder",
+      "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 147,
+      "counter": 149,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 72,
+      "counter": 75,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -42,10 +42,10 @@
     },
     {
       "id": 4,
-      "name": "mcp",
+      "name": "m",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 106,
+      "counter": 107,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -87,7 +87,7 @@
       "name": "book review",
       "short_desc": "book reviews",
       "full_desc": "book reviews and education",
-      "counter": 18,
+      "counter": 20,
       "hashtags": [
         "#bookreview",
         "#books",
@@ -213,7 +213,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 51,
+      "counter": 52,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -241,7 +241,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 409,
+      "counter": 424,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -342,6 +342,18 @@
         "#calisthenics",
         "#handstand",
         "#gym"
+      ]
+    },
+    {
+      "id": 29,
+      "name": "game",
+      "short_desc": "games in general but exploring yt live games",
+      "full_desc": "all sorts of fun in game space crossy road, pool, minecraft, and more",
+      "counter": 5,
+      "hashtags": [
+        "#videogame",
+        "#play",
+        "#gamer"
       ]
     }
   ]
