@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 149,
+      "counter": 163,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 75,
+      "counter": 80,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -45,7 +45,7 @@
       "name": "m",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 107,
+      "counter": 108,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -241,7 +241,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 424,
+      "counter": 431,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -349,11 +349,23 @@
       "name": "game",
       "short_desc": "games in general but exploring yt live games",
       "full_desc": "all sorts of fun in game space crossy road, pool, minecraft, and more",
-      "counter": 5,
+      "counter": 7,
       "hashtags": [
         "#videogame",
         "#play",
         "#gamer"
+      ]
+    },
+    {
+      "id": 30,
+      "name": "integral",
+      "short_desc": "practice solving integrals at integral.com",
+      "full_desc": "integral practice post college and learning techniques",
+      "counter": 3,
+      "hashtags": [
+        "#integral",
+        "#math",
+        "#fyp"
       ]
     }
   ]
