@@ -45,7 +45,7 @@
       "name": "m",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 108,
+      "counter": 111,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -213,7 +213,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 52,
+      "counter": 60,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -241,7 +241,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 431,
+      "counter": 460,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -255,7 +255,7 @@
       "name": "box",
       "short_desc": "all things related to boxing",
       "full_desc": "boxing and things related to fighting",
-      "counter": 41,
+      "counter": 42,
       "hashtags": [
         "#box",
         "#punch",
@@ -361,7 +361,7 @@
       "name": "integral",
       "short_desc": "practice solving integrals at integral.com",
       "full_desc": "integral practice post college and learning techniques",
-      "counter": 3,
+      "counter": 4,
       "hashtags": [
         "#integral",
         "#math",
