@@ -101,3 +101,4 @@ alias e='cd /data/data/com.termux/files/home/storage/shared/export'
 alias cpwd='pwd | termux-clipboard-set'
 alias cfile='termux-clipboard-set <'
 alias ltr='ls -ltr'
+alias s="cd ~/.shortcuts"
