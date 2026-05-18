@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 164,
+      "counter": 172,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -87,7 +87,7 @@
       "name": "book review",
       "short_desc": "book reviews",
       "full_desc": "book reviews and education",
-      "counter": 20,
+      "counter": 21,
       "hashtags": [
         "#bookreview",
         "#books",
@@ -143,7 +143,7 @@
       "name": "technical",
       "short_desc": "tech testing",
       "full_desc": "technical topics like a/b testing, product test engineer at microchip",
-      "counter": 1,
+      "counter": 2,
       "hashtags": [
         "#abtesting",
         "#tech",
@@ -241,7 +241,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 462,
+      "counter": 472,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -349,7 +349,7 @@
       "name": "game",
       "short_desc": "games in general but exploring yt live games",
       "full_desc": "all sorts of fun in game space crossy road, pool, minecraft, and more",
-      "counter": 14,
+      "counter": 17,
       "hashtags": [
         "#videogame",
         "#play",
@@ -361,7 +361,7 @@
       "name": "integral",
       "short_desc": "practice solving integrals at integral.com",
       "full_desc": "integral practice post college and learning techniques",
-      "counter": 5,
+      "counter": 7,
       "hashtags": [
         "#integral",
         "#math",
