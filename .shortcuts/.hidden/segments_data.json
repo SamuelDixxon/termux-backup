@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 172,
+      "counter": 173,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -143,7 +143,7 @@
       "name": "technical",
       "short_desc": "tech testing",
       "full_desc": "technical topics like a/b testing, product test engineer at microchip",
-      "counter": 2,
+      "counter": 3,
       "hashtags": [
         "#abtesting",
         "#tech",
@@ -241,7 +241,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 472,
+      "counter": 473,
       "hashtags": [
         "#squats",
         "#pistolsquats",
