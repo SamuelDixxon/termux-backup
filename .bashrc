@@ -95,10 +95,35 @@ alias zr='z_restore'
 
 
 # --- End of Termux Functions ---
-
-alias export='cd /data/data/com.termux/files/home/storage/shared/export'
-alias e='cd /data/data/com.termux/files/home/storage/shared/export'
-alias cpwd='pwd | termux-clipboard-set'
+# Core Environment Navigation & Utilities
+# =====================================================================
 alias cfile='termux-clipboard-set <'
+alias cpwd='pwd | termux-clipboard-set'
+alias e='cd /data/data/com.termux/files/home/storage/shared/export'
+alias export='cd /data/data/com.termux/files/home/storage/shared/export'
 alias ltr='ls -ltr'
-alias s="cd ~/.shortcuts"
+alias s='cd ~/.shortcuts'
+alias zb='z_backup'
+alias zr='z_restore'
+
+# =====================================================================
+# Option 1: Recursive Text Clipboard Copier
+# =====================================================================
+cfile_rec() {
+    # If no folder or file argument is given, default to the current directory '.'
+    local target="${1:-.}"
+    
+    if [ -f "$target" ]; then
+        # If it's just a single file, run standard redirection
+        termux-clipboard-set < "$target"
+        echo "Copied single file: $target"
+    elif [ -d "$target" ]; then
+        # If it's a folder, recursively scan for common text/code/json files
+        # and concatenate them seamlessly into the clipboard buffer
+        find "$target" -type f \( -name "*.json" -o -name "*.py" -o -name "*.sh" -o -name "*.txt" \) -exec cat {} + | termux-clipboard-set
+        echo "Successfully concatenated and copied text files from directory: '$target'"
+    else
+        echo "Error: '$target' is not a valid file or directory."
+    fi
+}
+
