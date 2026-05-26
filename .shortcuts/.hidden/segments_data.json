@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 173,
+      "counter": 176,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -140,16 +140,16 @@
     },
     {
       "id": 11,
-      "name": "technical",
+      "name": "tech",
       "short_desc": "tech testing",
-      "full_desc": "technical topics like a/b testing, product test engineer at microchip",
-      "counter": 3,
+      "full_desc": "tech engineer science learn math",
+      "counter": 5,
       "hashtags": [
-        "#abtesting",
         "#tech",
-        "#engineering",
-        "#producttesting",
-        "#microchip"
+        "#engineer",
+        "#science",
+        "#math",
+        "#engineer"
       ]
     },
     {
@@ -241,7 +241,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 473,
+      "counter": 490,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -349,7 +349,7 @@
       "name": "game",
       "short_desc": "games in general but exploring yt live games",
       "full_desc": "all sorts of fun in game space crossy road, pool, minecraft, and more",
-      "counter": 17,
+      "counter": 18,
       "hashtags": [
         "#videogame",
         "#play",
