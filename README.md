@@ -47,10 +47,13 @@ to long-term storage on SD cards or a Raspberry Pi.
 
 ```mermaid
 flowchart LR
-    A([org-camera-album]) -->|moves files| B([batch-backup])
+    W([widget tap]) -->|one-tap route| A
+    Q([quick-copy]) -->|title+tags| D
+
+    A([org-camera-album\nv2: smart router]) -->|moves files| B([batch-backup])
     B -->|zips to Export/| C([backup-all])
-    C -->|rsync + git push| D([manager])
-    D -->|hashtags to clipboard| E([transfer-export])
+    C -->|rsync + git push| D([manager\nv2: combined clipboard])
+    D -->|title+hashtags| E([transfer-export])
 
     subgraph storage [Android Storage Zones]
         direction TB
@@ -61,12 +64,19 @@ flowchart LR
         S5[SD card / Raspberry Pi\nlong-term archive]
     end
 
+    subgraph clipboard [Clipboard Output]
+        direction TB
+        CL1[pistol50]
+        CL2[hashtags line]
+    end
+
     A -.->|reads| S1
     A -.->|writes| S2
     B -.->|reads| S2
     B -.->|writes| S3
-    C -.->|reads .shortcuts/| S4
+    C -.->|syncs| S4
     D -.->|reads/writes| S2
+    D -.->|writes| clipboard
     E -.->|reads| S3
     E -.->|writes| S5
 ```
@@ -108,23 +118,25 @@ At step 2 you are prompted for backup mode:
 
 ### Step 1 · org-camera-album
 
-**Purpose:** Move raw shoot files out of `DCIM/Camera` into a named folder in
+**Purpose:** Move raw shoot files out of `DCIM/Camera` into a named segment folder in
 `storage/shared/`, then refresh the Android gallery via MediaStore.
 
-**Why this step exists:** Android's `DCIM/Camera` is a FUSE-mounted directory under
-MediaStore. Files deleted or moved by shell commands don't disappear from the gallery
-until MediaStore is explicitly notified. This step fires `termux-media-scan -r` on
-both source and destination so the gallery stays consistent.
+**v2 change -- smart auto-router:** Instead of always prompting for a typed name,
+the dialog now pre-populates with your **hot segments** (counter >= 50) at the top,
+then all other segments, then a "type new name" fallback. For daily recurring content
+like `pistol`, `skip`, `climb` -- one tap routes the files. Type only for new or
+one-off folders.
 
 ```
-DCIM/Camera/  -->  storage/shared/<your-folder-name>/
+Widget tap -> radio dialog (hot segments first) -> one tap -> files moved
+                                                -> "new name" -> text input
+DCIM/Camera/  -->  storage/shared/<segment>/
                    + termux-media-scan on both paths
 ```
 
-**Inputs:** User provides destination folder name via `termux-dialog` text prompt.
-
-**Key detail:** Target folder is always created under `storage/shared/` (not inside
-DCIM) so `z_backup` can find it without path resolution ambiguity.
+**Why this matters:** At high shooting volume (daily pistol squats, climb sessions)
+the old typed-name flow added friction every single time. The router eliminates
+that for segments you use constantly.
 
 ---
 
@@ -600,3 +612,183 @@ PI_DEST="/home/pi/sd-archive"
 [linktr.ee/sdixoninvesting](https://linktr.ee/sdixoninvesting) · [sdixoninvesting@gmail.com](mailto:sdixoninvesting@gmail.com)
 
 *Outdoors · Tech · Fitness · Education*
+
+---
+
+## Changelog
+
+All notable changes to the termux-backup content pipeline are documented here.
+Format: `[vX.Y] YYYY-MM-DD - Component - Description`
+Status: `tested` | `partial` | `pending`
+
+---
+
+### [v3.0] 2026-06 -- batch-backup -- Merge logic + full documentation
+
+**Status:** `partial` -- merge/append tested on ZFlip7, dialog pending
+
+**New features:**
+- `zip_with_merge()`: when a folder already has a zip in Export/, prompts:
+  - `m` Merge -- extract + combine + re-zip into single archive
+  - `a` Append -- new timestamped zip alongside existing (default)
+  - `s` Skip -- leave existing untouched
+- Full inline documentation: every function has purpose, design rationale,
+  Python/C++ analogues, and Android-specific gotchas explained
+- Debug output: `find` count printed before dialog so you can see if
+  storage is mounted even if dialog fails
+- `source ~/.bashrc || true` -- prevents `set -e` from killing script
+  when fastfetch/neofetch returns non-zero during sourcing
+
+**Bug fixes:**
+- `set -e` + `source ~/.bashrc` silent exit resolved via `|| true`
+- `find -not -path '*/.*'` removed -- broken on Samsung Android 16
+  kernel 6.6.x. Replaced with bash `[[ "$f" == .* ]]` check
+- `((PASS++)) || true` -- prevents arithmetic false positive under `set -e`
+- Interactive mode now scans ALL of `shared/` not just segment-matched folders
+
+**Known issues:**
+- termux-dialog checkbox still not finding folders on ZFlip7 interactive mode
+- Pending: full 3-device test (S23+, Pixel 9a, ZFlip7)
+
+---
+
+### [v2.0] 2026-05 -- batch-backup -- All-folders dialog + Samsung compat
+
+**Status:** `partial` -- hot mode working, interactive mode dialog broken
+
+**New features:**
+- Interactive mode scans all of `shared/` directly
+- Samsung OneUI `code:-2` cancel detection
+- Index field + text field fallback for dialog parsing
+- HOME/PATH guard for Termux Widget launch context
+- Preflight check with clear `pkg install` hint
+
+---
+
+### [v2.0] 2026-05 -- segment_manager.py -- Combined clipboard output
+
+**Status:** `tested` -- working on ZFlip7
+
+**New features:**
+- Combined clipboard block: `pistol50` on line 1, hashtags on line 2
+- `--quick` flag: bypass menu, 2 inputs, clipboard ready in <10s
+- Platform modes: YouTube (15 tags), Instagram (30), TikTok (10)
+- TikTok: Spanish word prompt for bilingual thumbnail label
+- `quick-copy` widget shortcut wraps `--quick` mode
+
+---
+
+### [v2.0] 2026-05 -- org-camera-album -- Smart auto-router
+
+**Status:** `tested` -- working on ZFlip7
+
+**New features:**
+- Radio dialog pre-populated with hot segments (counter >= 50) at top
+- One tap for daily recurring segments (pistol, skip, climb)
+- "-- type new name --" fallback for new/one-off folders
+- File type filtering: only moves media files (mp4, jpg, mov, etc.)
+
+---
+
+### [v1.0] 2026-04 -- content-pipeline -- Initial 5-step pipeline
+
+**Status:** `tested` -- hot mode working across ZFlip7
+
+- org-camera-album -> batch-backup -> backup-all -> manager -> transfer-export
+- Step 2 mode selector: y=hot / c=custom / n=single
+- Exit code propagation: any step failure halts pipeline with clear message
+
+---
+
+## Prototyping Diagrams
+
+### batch-backup v3: zip decision flow
+
+```mermaid
+flowchart TD
+    START([folder in TARGETS]) --> HAS{has_zip?}
+
+    HAS -->|no| DIRECT[z_backup direct
+new timestamped zip]
+    DIRECT --> DONE([ok])
+
+    HAS -->|yes| PROMPT[show existing zip name
+prompt: m / a / s]
+
+    PROMPT -->|m merge| EXT[extract existing zip
+to scratch dir]
+    EXT --> COPY[cp -n new files
+no-clobber: additive only]
+    COPY --> REZIP[zip -9 -r merged_timestamp.zip]
+    REZIP --> DEL[rm old zip
+rm scratch dir]
+    DEL --> DONE2([ok merged])
+
+    PROMPT -->|a append| APPEND[z_backup
+new timestamped zip
+existing preserved]
+    APPEND --> DONE3([ok appended])
+
+    PROMPT -->|s skip| SKIP([ok skipped])
+```
+
+### batch-backup v3: dialog debug flow
+
+```mermaid
+flowchart TD
+    LAUNCH([script starts]) --> SRC[source ~/.bashrc OR true
+prevents set -e exit]
+    SRC --> PRE[preflight
+check binaries + shared/ mount]
+    PRE -->|shared/ missing| SETUP([termux-setup-storage])
+    PRE -->|ok| SCAN[find shared/ -maxdepth 1 -type d
+NO -not -path flag]
+    SCAN --> COUNT{count > 0?}
+    COUNT -->|no| DEBUG[print debug hint
+find + termux-setup-storage]
+    COUNT -->|yes| DLG[termux-dialog checkbox]
+    DLG -->|code -2| CANCEL([exit 0 cancelled])
+    DLG -->|code -1| PARSE{index field
+present?}
+    PARSE -->|yes| IDX[parse index array
+strip whitespace
+validate bounds]
+    PARSE -->|no| TEXT[Samsung fallback
+parse text field
+trim + match labels]
+    IDX --> TARGETS([build TARGETS])
+    TEXT --> TARGETS
+```
+
+### Proposed future improvements
+
+```mermaid
+flowchart LR
+    subgraph now [v3 Current]
+        A[manual merge prompt
+per folder]
+        B[single device
+Export/]
+        C[timestamp zip naming]
+    end
+
+    subgraph v4 [v4 Proposed]
+        D[--merge-all flag
+auto-merge without prompt]
+        E[cross-device parity
+compare Export/ via SSH]
+        F[zip naming by
+segment + date range]
+        G[segment_manager
+parity warning on launch]
+        H[thumbnail writer
+burn pistol180 onto
+first 3s of video]
+    end
+
+    A --> D
+    B --> E
+    C --> F
+    C --> G
+    A --> H
+```
