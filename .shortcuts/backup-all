@@ -1,32 +1,132 @@
 #!/data/data/com.termux/files/usr/bin/bash
-set -euo pipefail
+# =============================================================================
+# backup-all  v2
+# =============================================================================
+# PURPOSE:
+#   Mirror ~/.shortcuts/ and ~/.bashrc into the termux-backup git repo,
+#   then push to GitHub. Logs every run to sync_history.csv.
+#
+# WHAT IT DOES:
+#   1. rsync ~/.shortcuts/ -> ~/termux-backup/.shortcuts/  (with --delete)
+#   2. cp ~/.bashrc -> ~/termux-backup/.bashrc
+#   3. Append a row to ~/termux-backup/sync_history.csv
+#   4. git add -A && git commit (if changes exist) && git push
+#
+# SYNC LOG (sync_history.csv):
+#   Columns: Timestamp, Device, Action, Files_Changed, Branch
+#   Actions:
+#     PUSH_BACKUP   - changes detected, committed and pushed
+#     NO_CHANGES    - nothing changed since last push (still logged)
+#     PUSH_FAILED   - push attempted but failed (network, auth)
+#
+# PIPELINE POSITION:
+#   content-pipeline step 3 of 5
+#   org-camera-album -> batch-backup -> [backup-all] -> manager -> transfer-export
+#
+# USAGE:
+#   bash ~/.shortcuts/backup-all        # normal run
+#   syncup                              # alias defined in ~/.bashrc
+# =============================================================================
 
-S="$HOME/.shortcuts/"
-D="$HOME/termux-backup"
-DS="$D/.shortcuts/"
-DEVICE=$(getprop ro.product.model | tr -d ' ')
+# HOME/PATH guard for widget launches
+if [ -z "$HOME" ]; then
+    export HOME="/data/data/com.termux/files/home"
+fi
+export PATH="/data/data/com.termux/files/usr/bin:$PATH"
 
-echo "📱 Device: $DEVICE"
+set -eo pipefail
 
-# 1. Ensure the destination exists
-mkdir -p "$DS"
+# -- Configuration -------------------------------------------------------------
+SRC_SHORTCUTS="$HOME/.shortcuts/"
+REPO="$HOME/termux-backup"
+DEST_SHORTCUTS="$REPO/.shortcuts/"
+SYNC_LOG="$REPO/sync_history.csv"
+BRANCH="main"
 
-# 2. Mirror System -> Repo (This is what deletes the junk files)
-# --delete: Removes files in DS that no longer exist in S
-rsync -av --delete --exclude=".git" "$S" "$DS"
+# Device identifier: model name with spaces stripped
+# Examples: SamsungSM-F766U, Pixel9a, SamsungSM-S916U1
+DEVICE=$(getprop ro.product.model 2>/dev/null | tr -d ' ' || echo "unknown")
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
-# 3. Mirror .bashrc
-[ -f "$HOME/.bashrc" ] && cp -f "$HOME/.bashrc" "$D/.bashrc"
+# -- Helpers -------------------------------------------------------------------
+log()  { echo "[$(date '+%H:%M:%S')] $*"; }
+ok()   { echo -e "\033[32mv\033[0m $*"; }
+fail() { echo -e "\033[31mx\033[0m $*"; }
+warn() { echo -e "\033[33m!\033[0m $*"; }
 
-# 4. Capture everything in Git
-cd "$D"
+# -- Ensure repo exists --------------------------------------------------------
+if [ ! -d "$REPO/.git" ]; then
+    fail "termux-backup repo not found at $REPO"
+    echo "  Clone it first:"
+    echo "  git clone https://github.com/SamuelDixxon/termux-backup $REPO"
+    exit 1
+fi
+
+log "Device: $DEVICE"
+log "Repo:   $REPO"
+
+# -- Step 1: Mirror .shortcuts/ ------------------------------------------------
+# --delete ensures files removed from .shortcuts/ are also removed from repo.
+# --exclude=.git prevents git internals from being touched.
+log "Syncing .shortcuts/ ..."
+mkdir -p "$DEST_SHORTCUTS"
+rsync -a --delete --exclude=".git" "$SRC_SHORTCUTS" "$DEST_SHORTCUTS"
+ok ".shortcuts/ synced"
+
+# -- Step 2: Mirror .bashrc ----------------------------------------------------
+if [ -f "$HOME/.bashrc" ]; then
+    cp -f "$HOME/.bashrc" "$REPO/.bashrc"
+    ok ".bashrc copied"
+fi
+
+# -- Step 3: Ensure sync_history.csv exists with header -----------------------
+if [ ! -f "$SYNC_LOG" ]; then
+    echo "Timestamp,Device,Action,Files_Changed,Branch" > "$SYNC_LOG"
+    log "Created sync_history.csv"
+fi
+
+# -- Step 4: Git commit + push -------------------------------------------------
+cd "$REPO"
 git add -A .
 
-# 5. Push to GitHub
-if ! git diff-index --quiet HEAD --; then
-    echo "📦 Changes/Deletions detected. Committing..."
-    git commit -m "Sync from $DEVICE: Mirroring deletions & updates"
-    git push origin main
+# Count staged changes for the log entry
+FILES_CHANGED=$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+
+if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+    # Changes detected -- commit and push
+    COMMIT_MSG="Sync from $DEVICE: $(date '+%Y-%m-%d %H:%M')"
+    log "Changes detected ($FILES_CHANGED file(s)) -- committing..."
+
+    git commit -m "$COMMIT_MSG" --quiet
+
+    if git push origin "$BRANCH" --quiet; then
+        ok "Pushed to GitHub ($FILES_CHANGED file(s) changed)"
+        # Log successful push
+        echo "$TIMESTAMP,$DEVICE,PUSH_BACKUP,$FILES_CHANGED,$BRANCH" >> "$SYNC_LOG"
+
+        # Commit the updated sync log itself
+        git add "$SYNC_LOG"
+        if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+            git commit -m "Log: sync from $DEVICE" --quiet
+            git push origin "$BRANCH" --quiet
+        fi
+    else
+        fail "git push failed"
+        echo "$TIMESTAMP,$DEVICE,PUSH_FAILED,$FILES_CHANGED,$BRANCH" >> "$SYNC_LOG"
+        exit 1
+    fi
 else
-    echo "✅ No changes to push."
+    # Nothing changed -- log it but don't push
+    ok "No changes to push"
+    echo "$TIMESTAMP,$DEVICE,NO_CHANGES,0,$BRANCH" >> "$SYNC_LOG"
+
+    # Still push the log entry itself if the CSV changed
+    git add "$SYNC_LOG"
+    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+        git commit -m "Log: no-change sync from $DEVICE" --quiet
+        git push origin "$BRANCH" --quiet
+        ok "Sync log updated on GitHub"
+    fi
 fi
+
+log "Done."
