@@ -106,7 +106,7 @@ SD card or Pi]
     S4 --> S5
 
     S2 -->|y| HOT[--hot
-auto-zip counter 50+]
+auto-zip counter gte 50]
     S2 -->|c| CUSTOM[interactive
 checkbox dialog]
     S2 -->|n| SINGLE[backup-folder
@@ -207,7 +207,7 @@ zip python3 jq termux-dialog]
 build SEG_NAMES + SEG_COUNTERS]
     PARSE --> MODE{argument?}
 
-    MODE -->|--hot| HOT[segments counter >= 50
+    MODE -->|--hot| HOT[segments counter gte 50
 auto-targets no dialog]
     MODE -->|--all| ALL[all segment-matched
 folders no dialog]
@@ -216,7 +216,7 @@ no zip yet]
     MODE -->|none| DLG[termux-dialog checkbox
 all shared/ folders]
 
-    DLG -->|Samsung values field| VPARSE[jq .values[].text
+    DLG -->|Samsung values field| VPARSE[parse values text field
 strip annotations]
     DLG -->|standard index field| IPARSE[jq .index
 validate bounds]
@@ -254,7 +254,7 @@ unbacked segments]
 
 **Known issue:** checkbox dialog (`none` mode) confirmed showing on ZFlip7 but
 selection not zipping. Root cause: Samsung returns
-`values: [{index:N, text:"name"}]` not a flat array. Fix in v3: `jq .values[].text`.
+`values: [{index:N, text:"name"}]` not a flat array. Fix in v3: `parse values text field`.
 Status: deployed, awaiting test confirmation.
 
 **Merge/append/skip** -- tested and working on ZFlip7. When a folder already
@@ -353,7 +353,7 @@ in DCIM/Camera]
     COUNT -->|files found| BUILDLIST[build radio list
 from segments_data.json]
     BUILDLIST --> HOT2[hot segments
-counter 50+ at top]
+counter gte 50 at top]
     HOT2 --> OTHER[all other segments
 counter desc]
     OTHER --> NEW[-- type new name --
@@ -595,7 +595,7 @@ PI_DEST="/home/pi/sd-archive"
 ### Known issues
 
 - `batch-backup` interactive checkbox: dialog shows and folders listed correctly.
-  Confirm button triggers cancel. Fix deployed (v3.1 `jq .values[].text`).
+  Confirm button triggers cancel. Fix deployed (v3.1 `parse values text field`).
   **Needs test confirmation on ZFlip7.**
 - `transfer-export` wireless path: untested. Blocked on Pi physical access
   (micro HDMI cable ordered).
