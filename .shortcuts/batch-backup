@@ -1,77 +1,179 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# batch-backup - zip multiple segment folders in one pass
+# =============================================================================
+# batch-backup  v3
+# =============================================================================
+# PURPOSE:
+#   Zip content segment folders from ~/storage/shared/ into Export/.
+#   Supports 4 run modes, merge logic for existing zips, and full
+#   Samsung OneUI dialog compatibility.
 #
-# MODES:
-#   batch-backup            - checkbox dialog: pick any segments to backup
-#   batch-backup --all      - zip every segment that has a matching folder
-#   batch-backup --hot      - zip segments with counter >= 50 (high-volume)
-#   batch-backup --unzipped - zip only segments with NO existing zip in Export
+# MODES (pass as first argument):
+#   (none)       Interactive checkbox dialog -- shows ALL folders in shared/
+#   --hot        Auto-zip segments with counter >= 50 (no dialog)
+#   --all        Auto-zip every segment-matched folder (no dialog)
+#   --unzipped   Auto-zip only folders with NO existing zip in Export/
 #
-# Exits 0 on full success, 1 if any zip failed (pipeline-safe)
+# MERGE vs APPEND:
+#   When a folder already has a zip in Export/, you are prompted:
+#     [m] Merge  -- extract existing zip, add new files, re-zip as one archive
+#                   Use when: content is additive, want one zip per segment
+#     [a] Append -- create a new timestamped zip alongside the existing one
+#                   Use when: want date-stamped history, shoots are distinct
+#     [s] Skip   -- leave existing zip untouched
+#
+# STANDALONE USAGE (from Termux terminal):
+#   bash ~/.shortcuts/batch-backup
+#   bash ~/.shortcuts/batch-backup --hot
+#   bash ~/.shortcuts/batch-backup --all
+#   bash ~/.shortcuts/batch-backup --unzipped
+#
+# WIDGET USAGE:
+#   Tap the batch-backup shortcut in Termux Widget.
+#   Requires: chmod +x ~/.shortcuts/batch-backup
+#   File must be pure ASCII (no unicode box-drawing chars).
+#
+# DIALOG DEBUGGING:
+#   If "No folders found" -- run this and share output:
+#     find ~/storage/shared -maxdepth 1 -mindepth 1 -type d
+#   If dialog shows but selections don't zip -- check:
+#     echo '{}' | jq .      (confirms jq is working)
+#     termux-dialog radio -t "test" -v "a,b,c"   (confirms dialog works)
+#
+# KNOWN ISSUES / DEVICE NOTES:
+#   ZFlip7 (SM-F766U, Android 16):
+#     - find -not -path '*/.*' returns empty -- use basename check instead
+#     - set -e causes silent exit if source ~/.bashrc returns non-zero
+#     - termux-dialog may return 'index' or 'text' field depending on version
+#   Samsung OneUI general:
+#     - termux-dialog checkbox returns code:-2 on dismiss (not null)
+#     - Sometimes omits 'index' field -- must fall back to 'text' field
+#     - 'values' field (array) available in newer termux-api versions
+#
+# DEPENDENCIES:
+#   pkg install zip python3 jq termux-api
+#   z_backup function must be defined in ~/.bashrc
+#
+# FILES:
+#   ~/.shortcuts/.hidden/segments_data.json  -- segment counter database
+#   ~/storage/shared/Export/                 -- zip output directory
+#
+# PIPELINE POSITION:
+#   content-pipeline step 2 of 5
+#   org-camera-album -> [batch-backup] -> backup-all -> manager -> transfer-export
+# =============================================================================
 
+# -- Environment guard ---------------------------------------------------------
+# Termux Widget strips HOME and PATH. Set them explicitly so all binaries
+# and paths resolve correctly regardless of launch context.
+if [ -z "$HOME" ]; then
+    export HOME="/data/data/com.termux/files/home"
+fi
+export PATH="/data/data/com.termux/files/usr/bin:$PATH"
+
+# -- Error handling ------------------------------------------------------------
+# IMPORTANT: we use set -e (exit on error) but NOT set -u (unbound variable).
+# Reason: bash 5.x on Android throws errors for variables declared at script
+# scope inside case blocks before assignment -- a known Android bash quirk.
+# set -o pipefail catches failures inside pipes (e.g. find | sort).
 set -eo pipefail
-# NOTE: deliberately NOT using -u (unbound var) because case/loop scope
-# variables need to be safe to reference before assignment in bash 5.x
 
-# -- Paths ----------------------------------------------------------------------
-SHARED="$HOME/storage/shared"
-EXPORT="$SHARED/Export"
+# -- Configuration -------------------------------------------------------------
+SHARED="$HOME/storage/shared"          # FUSE-mounted Android shared storage
+EXPORT="$SHARED/Export"                # Canonical zip output location
 DATA_FILE="$HOME/.shortcuts/.hidden/segments_data.json"
-HOT_THRESHOLD=50
+HOT_THRESHOLD=50                       # counter >= this = "hot" segment
+MERGE_SCRATCH="/data/data/com.termux/files/home/.cache/batch-backup-merge"
+ZIP_BIN="/data/data/com.termux/files/usr/bin/zip"
 
-# -- ANSI palette ---------------------------------------------------------------
+# -- ANSI colour palette -------------------------------------------------------
 BOLD="\033[1m"; RESET="\033[0m"; GREEN="\033[32m"; YELLOW="\033[33m"
 RED="\033[31m"; CYAN="\033[36m"; GRAY="\033[90m"; DIM="\033[2m"
+BLUE="\033[34m"; MAGENTA="\033[35m"
 
-# -- Dependency preflight -------------------------------------------------------
-# Catches missing packages before the loop starts - avoids mid-run failures
+# -- Output helpers ------------------------------------------------------------
+ok()     { echo -e "  ${GREEN}${BOLD}v${RESET}  $*"; }
+fail()   { echo -e "  ${RED}${BOLD}x${RESET}  $*"; }
+warn()   { echo -e "  ${YELLOW}!${RESET}  $*"; }
+info()   { echo -e "  ${GRAY}$*${RESET}"; }
+indent() { echo -e "     ${GRAY}$*${RESET}"; }
+header() { echo -e "\n${BOLD}${CYAN}-- $* ${RESET}"; }
+
+# =============================================================================
+# FUNCTION: preflight
+# =============================================================================
+# Validates all required binaries exist before the main loop starts.
+# Fail-fast pattern: better to exit here with a clear message than to
+# die mid-loop with a cryptic "command not found" on the 3rd folder.
+#
+# Checks both full Termux paths and $PATH for each dependency.
+# Full paths are preferred because widget launches have stripped PATH.
 preflight() {
     local missing=()
-    local pkg bin
-
     declare -A DEPS=(
-        ["zip"]="/data/data/com.termux/files/usr/bin/zip"
+        ["zip"]="$ZIP_BIN"
         ["python3"]="/data/data/com.termux/files/usr/bin/python3"
         ["jq"]="/data/data/com.termux/files/usr/bin/jq"
         ["termux-dialog"]="/data/data/com.termux/files/usr/bin/termux-dialog"
     )
-
     for pkg in "${!DEPS[@]}"; do
         bin="${DEPS[$pkg]}"
         if [ ! -x "$bin" ] && ! command -v "$pkg" >/dev/null 2>&1; then
             missing+=("$pkg")
         fi
     done
-
     if [ ${#missing[@]} -gt 0 ]; then
-        echo -e "${RED}${BOLD}x Missing packages - install before running:${RESET}"
+        echo -e "${RED}${BOLD}x Missing packages:${RESET}"
         echo -e "${YELLOW}  pkg install ${missing[*]}${RESET}"
+        exit 1
+    fi
+
+    # Verify shared storage is mounted
+    # This is the most common reason for "No folders found" --
+    # termux-setup-storage must be run and storage permission granted.
+    if [ ! -d "$SHARED" ]; then
+        echo -e "${RED}x storage/shared not found.${RESET}"
+        echo -e "${YELLOW}  Run: termux-setup-storage${RESET}"
+        echo -e "${GRAY}  Then grant storage permission in the Android dialog.${RESET}"
         exit 1
     fi
 }
 
-# -- Source z_backup ------------------------------------------------------------
-source "$HOME/.bashrc" 2>/dev/null
+# Source z_backup from .bashrc.
+# 2>/dev/null suppresses fastfetch/neofetch banner output during source.
+# We source BEFORE preflight so z_backup is available for the zip loop.
+# If source returns non-zero (e.g. fastfetch fails), set -e would kill us --
+# the || true absorbs that so we continue and let preflight catch real issues.
+source "$HOME/.bashrc" 2>/dev/null || true
+
 preflight
 
+# Verify z_backup loaded successfully from .bashrc
 if ! declare -f z_backup >/dev/null 2>&1; then
-    echo -e "${RED}x z_backup not found - ensure ~/.bashrc is up to date.${RESET}"
+    echo -e "${RED}x z_backup function not found after sourcing ~/.bashrc${RESET}"
+    echo -e "${GRAY}  Check ~/.bashrc contains the z_backup() definition.${RESET}"
     exit 1
 fi
 
-# -- Helpers --------------------------------------------------------------------
-ok()     { echo -e "  ${GREEN}${BOLD}v${RESET}  $*"; }
-fail()   { echo -e "  ${RED}${BOLD}x${RESET}  $*"; }
-warn()   { echo -e "  ${YELLOW}!${RESET}  $*"; }
-info()   { echo -e "  ${GRAY}$*${RESET}"; }
-indent() { echo -e "     ${GRAY}$*${RESET}"; }
-
-# -- Parse segments_data.json -> parallel arrays SEG_NAMES / SEG_COUNTERS --------
+# =============================================================================
+# FUNCTION: parse_segments
+# =============================================================================
+# Reads segments_data.json and builds two parallel arrays:
+#   SEG_NAMES[]    -- segment names, sorted by counter descending
+#   SEG_COUNTERS[] -- corresponding counters
+#
+# Parallel arrays are a bash idiom for struct-like data. Index i links
+# a name to its counter across both arrays. Python equivalent:
+#   [(s['name'], s['counter']) for s in sorted(segs, key=...)]
+#
+# Uses python3 for JSON parsing since bash has no native JSON support
+# and jq syntax for array extraction is verbose for this use case.
 parse_segments() {
     if [ ! -f "$DATA_FILE" ]; then
-        echo -e "${RED}x segments_data.json not found: $DATA_FILE${RESET}"
+        echo -e "${RED}x segments_data.json not found:${RESET}"
+        echo -e "${GRAY}  $DATA_FILE${RESET}"
         exit 1
     fi
+
     mapfile -t SEG_NAMES < <(
         python3 -c "
 import json
@@ -81,6 +183,7 @@ for s in sorted(d['segments'], key=lambda x: x['counter'], reverse=True):
     print(s['name'])
 "
     )
+
     mapfile -t SEG_COUNTERS < <(
         python3 -c "
 import json
@@ -92,70 +195,224 @@ for s in sorted(d['segments'], key=lambda x: x['counter'], reverse=True):
     )
 }
 
-# -- Resolve folder basenames for a segment name --------------------------------
-# Matching strategy (in order):
-#   1. Exact match:          shared/pistol     -> segment "pistol"
-#   2. Digit suffix:         shared/mcp96      -> segment "mcp"
-#   3. Separator variants:   shared/hike4      -> segment "hike"  (digit after name)
-#   4. Short alias:          shared/m81        -> segment "mcp"   (first char + digits)
+# =============================================================================
+# FUNCTION: resolve_folders
+# =============================================================================
+# Given a segment name, returns all matching folder basenames in shared/.
+# This handles the real-world naming gap between segment names and actual
+# folder names on disk.
 #
-# NOTE: short alias (m81->mcp) uses first-letter match + digits only, to avoid
-# false positives. "m" matches "mcp", "mcped" etc. - we take the SHORTEST
-# segment name that starts with the same letter when a short alias is detected.
+# Four-tier matching strategy:
+#   Tier 1 - Exact:        "mcp"  -> shared/mcp/
+#   Tier 2 - Digit suffix: "mcp"  -> shared/mcp96/, shared/mcp98/
+#   Tier 3 - Short alias:  "mcp"  -> shared/m81/, shared/m90-m99/
+#             (single letter + digits, only for segments with len <= 4)
+#   Tier 4 - DCIM:         "mcp"  -> shared/DCIM/mcp/
+#             (z_backup resolves DCIM path internally)
 #
-# FIX: guard printf against empty array so no blank entries are emitted
+# NOTE: We intentionally do NOT use -not -path '*/.*' in the find command.
+# On Samsung Android 16 (kernel 6.6.x), this flag causes find to return
+# empty results even when directories exist. Dotfile filtering is done
+# inside the loop via bash string comparison instead.
 resolve_folders() {
     local name="$1"
     local found=()
     local base dir
 
-    # Exact match in shared/
+    # Tier 1: exact match
     [ -d "$SHARED/$name" ] && found+=("$name")
 
-    # Scan all dirs in shared/ for variants
+    # Tiers 2 & 3: scan all dirs, match by pattern
     while IFS= read -r -d '' dir; do
         base=$(basename "$dir")
-        [ "$base" = "$name" ] && continue  # already added above
+        [ "$base" = "$name" ] && continue          # already added in tier 1
+        [[ "$base" == .* ]] && continue            # skip dotfiles/hidden dirs
 
-        # Strategy 2 & 3: name followed by digits (mcp96, hike4, skip2)
+        # Tier 2: segment name + digits only (mcp96, mcp98, skip2)
         if [[ "$base" =~ ^${name}[0-9]+$ ]]; then
             found+=("$base")
             continue
         fi
 
-        # Strategy 4: short alias - single letter + digits maps to segment
-        # e.g. m81, m90, m99 -> try to match against segment name starting with same letter
+        # Tier 3: single lowercase letter + digits (m81, m90)
+        # Only matches segments of length <= 4 to avoid false positives
+        # between "mcp" (len 3) and "mcped" (len 5)
         if [[ "$base" =~ ^[a-z][0-9]+$ ]]; then
             local first_char="${base:0:1}"
             local seg_first="${name:0:1}"
-            if [ "$first_char" = "$seg_first" ] && [ ${#name} -le 4 ]; then
-                # Only match short segments (mcp=3, not mcped=5) to avoid ambiguity
+            if [ "$first_char" = "$seg_first" ] && [ "${#name}" -le 4 ]; then
                 found+=("$base")
             fi
         fi
-
     done < <(find "$SHARED" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
 
-    # DCIM subfolder (z_backup resolves internally)
+    # Tier 4: DCIM subfolder
     [ -d "$SHARED/DCIM/$name" ] && found+=("$name")
 
-    # Only print if array is non-empty - prevents blank line entries
-    if [ ${#found[@]} -gt 0 ]; then
+    # Only print if non-empty -- an empty printf emits a blank line which
+    # becomes an empty string target passed to z_backup, causing zip failure
+    if [ "${#found[@]}" -gt 0 ]; then
         printf '%s\n' "${found[@]}" | sort -u
     fi
 }
 
-# -- Check for existing zip in Export/ -----------------------------------------
+# =============================================================================
+# FUNCTION: has_zip
+# =============================================================================
+# Checks whether a zip already exists in Export/ for a given folder name.
+# Returns 0 (true in bash) if found, 1 if not.
+#
+# IMPORTANT: this function is NEVER used to skip zipping.
+# It is only used for:
+#   1. Dialog labels: "pistol [zipped]" so you know what's already backed up
+#   2. Triggering the merge/append/skip prompt when re-zipping
+#   3. Parity report: identifying segments with no zip yet
 has_zip() {
     ls "$EXPORT/${1}_"*.zip 2>/dev/null | head -1 | grep -q .
 }
 
-# -- Parity report --------------------------------------------------------------
+# =============================================================================
+# FUNCTION: get_existing_zip
+# =============================================================================
+# Returns the path of the MOST RECENT zip for a folder name.
+# Used by the merge workflow to find which zip to extract and merge into.
+# If multiple zips exist, takes the newest by filename (timestamps sort lexically).
+get_existing_zip() {
+    ls -t "$EXPORT/${1}_"*.zip 2>/dev/null | head -1
+}
+
+# =============================================================================
+# FUNCTION: zip_with_merge
+# =============================================================================
+# Core zip logic with merge/append/skip decision for already-zipped folders.
+#
+# MERGE mode:
+#   1. Find the most recent existing zip for this folder
+#   2. Extract it into a scratch directory
+#   3. Copy new files from the source folder into the scratch dir
+#      (existing files are NOT overwritten -- new files are additive)
+#   4. Re-zip the scratch dir into a new timestamped zip in Export/
+#   5. Delete the old zip (replaced by merged version)
+#   6. Clean up scratch dir
+#
+# APPEND mode:
+#   Simply calls z_backup which creates a new timestamped zip.
+#   The old zip is preserved. Good for date-stamped history.
+#
+# SKIP mode:
+#   Returns 0 without doing anything.
+#
+# The merge scratch dir uses /data/... (internal storage) not shared/
+# because write operations to FUSE-mounted storage can be unreliable
+# for temporary intermediate files.
+zip_with_merge() {
+    local folder="$1"
+    local src="$SHARED/$folder"
+    local timestamp
+    timestamp=$(date +%Y%m%d-%H%M)
+
+    # If no existing zip, just do a normal backup
+    if ! has_zip "$folder"; then
+        z_backup "$folder"
+        return $?
+    fi
+
+    # Existing zip found -- ask what to do
+    local existing_zip
+    existing_zip=$(get_existing_zip "$folder")
+    local existing_name
+    existing_name=$(basename "$existing_zip")
+
+    echo ""
+    echo -e "  ${YELLOW}Existing zip found:${RESET} ${GRAY}$existing_name${RESET}"
+    echo -e "  ${CYAN}m${RESET} Merge   -- combine existing + new files into one zip"
+    echo -e "  ${CYAN}a${RESET} Append  -- add new timestamped zip, keep existing"
+    echo -e "  ${CYAN}s${RESET} Skip    -- leave existing zip untouched"
+    echo ""
+    read -rp "$(echo -e "  ${GRAY}Choice (m/a/s) [a]: ${RESET}")" merge_choice
+    merge_choice="${merge_choice:-a}"
+
+    case "${merge_choice,,}" in
+
+        m)  # -- MERGE ---------------------------------------------------------
+            info "Merging into single zip..."
+
+            # Create scratch directory in internal storage (not FUSE)
+            local scratch="$MERGE_SCRATCH/$folder"
+            rm -rf "$scratch" 2>/dev/null
+            mkdir -p "$scratch"
+
+            # Step 1: Extract existing zip into scratch
+            info "Extracting existing zip..."
+            unzip -q "$existing_zip" -d "$scratch" 2>/dev/null
+            if [ $? -ne 0 ]; then
+                fail "Could not extract $existing_name"
+                rm -rf "$scratch"
+                return 1
+            fi
+
+            # Step 2: Copy new files from source folder into scratch
+            # -n = no-clobber: don't overwrite files already in scratch
+            # This ensures existing content is preserved, new content is added
+            info "Adding new files..."
+            find "$src" -maxdepth 1 -type f -print0 2>/dev/null | \
+                xargs -0 -I{} cp -n {} "$scratch/" 2>/dev/null
+
+            # Step 3: Re-zip scratch into a new timestamped zip
+            local new_zip="$EXPORT/${folder}_merged_${timestamp}.zip"
+            info "Creating merged zip..."
+            cd "$scratch"
+            "$ZIP_BIN" -9 -r "$new_zip" . >/dev/null 2>&1
+            local zip_exit=$?
+            cd - >/dev/null
+
+            if [ $zip_exit -ne 0 ]; then
+                fail "Merge zip failed for $folder"
+                rm -rf "$scratch"
+                return 1
+            fi
+
+            # Step 4: Remove old zip now that merged version exists
+            rm -f "$existing_zip"
+            rm -rf "$scratch"
+
+            local zip_size
+            zip_size=$(du -sh "$new_zip" 2>/dev/null | cut -f1)
+            ok "$folder -- merged -> ${folder}_merged_${timestamp}.zip ($zip_size)"
+            return 0
+            ;;
+
+        s)  # -- SKIP ----------------------------------------------------------
+            info "Skipped $folder (existing zip preserved)"
+            return 0
+            ;;
+
+        *)  # -- APPEND (default) ----------------------------------------------
+            info "Appending new zip alongside existing..."
+            z_backup "$folder"
+            return $?
+            ;;
+    esac
+}
+
+# =============================================================================
+# FUNCTION: parity_report
+# =============================================================================
+# Cross-references segments_data.json against disk and Export/ to show:
+#   - Segments with a folder but no zip (unbacked -- urgent)
+#   - Segments with no folder on this device (not started / different device)
+#   - Segments fully backed up
+#
+# This is a set-difference audit:
+#   A = segments in JSON
+#   B = folders on disk
+#   C = zips in Export/
+#   unbacked     = (A intersect B) minus C
+#   not_on_device = A minus B
+#   backed_up    = A intersect B intersect C
 parity_report() {
-    echo -e "\n${BOLD}${CYAN}-- Parity report ----------------------------------${RESET}\n"
-    local missing_zip=()
-    local missing_folder=()
-    local all_good=()
+    header "Parity report"
+    local missing_zip=() missing_folder=() all_good=()
     local seg_name seg_count seg_folders any_missing folder
 
     for i in "${!SEG_NAMES[@]}"; do
@@ -163,8 +420,8 @@ parity_report() {
         seg_count="${SEG_COUNTERS[$i]}"
         mapfile -t seg_folders < <(resolve_folders "$seg_name")
 
-        if [ ${#seg_folders[@]} -eq 0 ]; then
-            missing_folder+=("$seg_name ($seg_countx)")
+        if [ "${#seg_folders[@]}" -eq 0 ]; then
+            missing_folder+=("$seg_name (${seg_count}x)")
             continue
         fi
 
@@ -172,45 +429,67 @@ parity_report() {
         for folder in "${seg_folders[@]}"; do
             if ! has_zip "$folder"; then
                 any_missing=true
-                missing_zip+=("$folder ($seg_countx)")
+                missing_zip+=("$folder (${seg_count}x)")
             fi
         done
         $any_missing || all_good+=("$seg_name")
     done
 
-    if [ ${#missing_zip[@]} -gt 0 ]; then
-        echo -e "  ${YELLOW}${BOLD}No zip in Export yet:${RESET}"
+    if [ "${#missing_zip[@]}" -gt 0 ]; then
+        echo -e "  ${YELLOW}${BOLD}Unbacked (folder exists, no zip):${RESET}"
         for item in "${missing_zip[@]}"; do
             echo -e "    ${YELLOW}->${RESET} ${GRAY}$item${RESET}"
         done
         echo ""
     fi
 
-    if [ ${#missing_folder[@]} -gt 0 ]; then
-        echo -e "  ${GRAY}${BOLD}Segment with no folder on device:${RESET}"
+    if [ "${#missing_folder[@]}" -gt 0 ]; then
+        echo -e "  ${GRAY}Segment not on this device:${RESET}"
         for item in "${missing_folder[@]}"; do
             echo -e "    ${GRAY}. $item${RESET}"
         done
         echo ""
     fi
 
-    [ ${#all_good[@]} -gt 0 ] && \
+    [ "${#all_good[@]}" -gt 0 ] && \
         echo -e "  ${GREEN}Backed up:${RESET} ${GRAY}${all_good[*]}${RESET}"
+    echo ""
 }
 
-# -- Parse segments -------------------------------------------------------------
+# =============================================================================
+# MAIN: mode parsing and target building
+# =============================================================================
+
 MODE="${1:---interactive}"
 parse_segments
 
-# -- Build TARGETS array based on mode -----------------------------------------
-# FIX: all loop variables are plain (no `local` outside functions)
+# Declare all arrays at script scope (not inside functions or case blocks)
+# to avoid the bash 5.x 'local outside function' error on Android.
 declare -a TARGETS=()
 declare -a AVAILABLE=()
 declare -a AVAILABLE_LABELS=()
 seg_name=""; seg_count=""; seg_folders=(); zip_marker=""
 
+# System directories to exclude from the interactive folder list.
+# These are Android system folders that should never be zipped.
+# Content folders (pistol, skip, climb, etc.) are NOT in this list.
+EXCLUDE_DIRS="Export|Android|Alarms|Audiobooks|Books|Documents|Download"
+EXCLUDE_DIRS+="|Movies|Music|Notifications|Podcasts|Recordings|Ringtones"
+EXCLUDE_DIRS+="|SamsungNotes|RW_LIB|DCIM|Pictures|Book|Game|Holiday"
+
+# Build segment->counter lookup map for interactive mode labels.
+# Associative array: SEG_MAP["pistol"] = "371"
+declare -A SEG_MAP=()
+for i in "${!SEG_NAMES[@]}"; do
+    SEG_MAP["${SEG_NAMES[$i]}"]="${SEG_COUNTERS[$i]}"
+done
+
+# =============================================================================
+# CASE: build TARGETS array based on mode
+# =============================================================================
 case "$MODE" in
 
+    # -- --all: zip every folder that matches any segment name ----------------
     --all)
         for seg_name in "${SEG_NAMES[@]}"; do
             mapfile -t seg_folders < <(resolve_folders "$seg_name")
@@ -220,6 +499,10 @@ case "$MODE" in
         done
         ;;
 
+    # -- --hot: zip only segments used >= HOT_THRESHOLD times ----------------
+    # These are your daily/high-volume segments (pistol, skip, climb, mcp...)
+    # The counter increments every time you copy hashtags in segment_manager.
+    # So --hot auto-selects your most active content without any manual input.
     --hot)
         for i in "${!SEG_NAMES[@]}"; do
             seg_name="${SEG_NAMES[$i]}"
@@ -233,6 +516,9 @@ case "$MODE" in
         done
         ;;
 
+    # -- --unzipped: zip only folders with no existing zip in Export/ ---------
+    # Useful after a fresh install or when catching up on a backlog.
+    # Never prompts for merge/append since by definition no zip exists.
     --unzipped)
         for seg_name in "${SEG_NAMES[@]}"; do
             mapfile -t seg_folders < <(resolve_folders "$seg_name")
@@ -242,87 +528,227 @@ case "$MODE" in
         done
         ;;
 
+    # -- Interactive: checkbox dialog showing ALL folders in shared/ ----------
     *)
-        # Interactive checkbox - FIX: zip_marker is plain var, no `local`
-        for i in "${!SEG_NAMES[@]}"; do
-            seg_name="${SEG_NAMES[$i]}"
-            seg_count="${SEG_COUNTERS[$i]}"
-            mapfile -t seg_folders < <(resolve_folders "$seg_name")
-            for f in "${seg_folders[@]}"; do
-                [ -z "$f" ] && continue
-                zip_marker=""
-                has_zip "$f" && zip_marker=" v"
-                AVAILABLE+=("$f")
-                AVAILABLE_LABELS+=("${f} (${seg_count}x)${zip_marker}")
-            done
-        done
+        # DESIGN NOTE: We scan shared/ directly rather than filtering to
+        # segment-matched folders. This ensures unregistered folders
+        # (climb, gym, poker, zalat, etc.) appear in the dialog alongside
+        # registered segments. The segment counter is shown as a label
+        # annotation only -- it doesn't filter the list.
+        #
+        # DIALOG DEBUG FLOW:
+        # If this section shows "No folders found", run:
+        #   find ~/storage/shared -maxdepth 1 -mindepth 1 -type d
+        # If that returns folders, the issue is in the exclude list or
+        # the dotfile filter below.
+        # If that returns nothing, run:
+        #   termux-setup-storage
+        # and grant storage permission.
+        #
+        # SAMSUNG ONEUI COMPAT:
+        # termux-dialog checkbox response JSON varies by API version:
+        #   Standard:  {"code":-1, "index":"0,2,4", "text":"..."}
+        #   Older API: {"code":-1, "text":"folder1,folder2"}  (no index field)
+        #   Cancelled: {"code":-2, ...}
+        # We handle all three cases below.
 
-        if [ ${#AVAILABLE[@]} -eq 0 ]; then
-            echo -e "${YELLOW}No segment folders found in storage/shared/.${RESET}"
-            echo -e "${GRAY}Create folders matching your segment names first.${RESET}"
+        while IFS= read -r -d '' dir; do
+            f=$(basename "$dir")
+            [ -z "$f" ] && continue
+
+            # Skip hidden/dotfile directories (bash string comparison,
+            # NOT find flags -- find flags are unreliable on Android 16)
+            [[ "$f" == .* ]] && continue
+
+            # Skip Android system directories
+            echo "$f" | grep -qE "^($EXCLUDE_DIRS)$" && continue
+
+            # Build label: "pistol (371x) [zipped]"
+            zip_marker=""
+            has_zip "$f" && zip_marker=" [zipped]"
+
+            counter_label=""
+            for seg in "${!SEG_MAP[@]}"; do
+                if [[ "$f" == "$seg" ]] || [[ "$f" =~ ^${seg}[0-9]+$ ]]; then
+                    counter_label=" (${SEG_MAP[$seg]}x)"
+                    break
+                fi
+            done
+
+            AVAILABLE+=("$f")
+            AVAILABLE_LABELS+=("${f}${counter_label}${zip_marker}")
+        done < <(find "$SHARED" -maxdepth 1 -mindepth 1 -type d \
+                 -print0 2>/dev/null | sort -z)
+
+        # -- Debug output: always show count so we know find ran correctly ----
+        echo -e "${GRAY}  Scanning shared/... found ${#AVAILABLE[@]} folder(s)${RESET}"
+
+        if [ "${#AVAILABLE[@]}" -eq 0 ]; then
+            echo -e "${RED}No folders found in storage/shared/.${RESET}"
+            echo -e "${GRAY}Debug: run this to check storage mount:${RESET}"
+            echo -e "${CYAN}  find ~/storage/shared -maxdepth 1 -mindepth 1 -type d${RESET}"
+            echo -e "${GRAY}If empty, run: termux-setup-storage${RESET}"
             exit 0
         fi
 
-        # FIX: CHECKLIST is plain var, no `local`
         CHECKLIST=$(printf '%s,' "${AVAILABLE_LABELS[@]}" | sed 's/,$//')
 
+        # Show the dialog
         SELECTED_JSON=$(termux-dialog checkbox \
-            -t "Select folders to zip (v = already backed up)" \
-            -v "$CHECKLIST")
+            -t "Select folders to zip" \
+            -v "$CHECKLIST" 2>/dev/null)
 
-        INDICES=$(echo "$SELECTED_JSON" | jq -r '.index // empty')
+        # Debug: uncomment to see raw dialog response
+        # echo "DEBUG dialog response: $SELECTED_JSON"
 
-        if [ -z "$INDICES" ] || [ "$INDICES" = "null" ]; then
-            termux-toast "Cancelled"
+        # Case 1: user dismissed the dialog
+        DIALOG_CODE=$(echo "$SELECTED_JSON" | jq -r '.code // "-2"' 2>/dev/null)
+        if [ "$DIALOG_CODE" = "-2" ] || [ -z "$DIALOG_CODE" ]; then
+            termux-toast "Cancelled" 2>/dev/null
             exit 0
         fi
 
-        IFS=',' read -ra IDX_ARR <<< "$INDICES"
-        for idx in "${IDX_ARR[@]}"; do
-            TARGETS+=("${AVAILABLE[$idx]}")
-        done
+        # -- Parse dialog response --------------------------------------------
+        # termux-dialog checkbox returns different JSON structures depending
+        # on termux-api version and Samsung OneUI version. We try all known
+        # field names in order:
+        #
+        #   Case A: .index field  "0,2,4"      (standard termux-api)
+        #   Case B: .values field ["a","b"]    (newer termux-api on Samsung)
+        #   Case C: .text field   "label1,label2" (older OneUI fallback)
+        #
+        # Debug: to see exactly what YOUR device returns, run:
+        #   termux-dialog checkbox -t "test" -v "a,b,c"
+        #   select items, confirm, and paste the JSON output here
+
+        # Print raw response to stderr for debugging (remove # to enable)
+        # echo "DEBUG: $SELECTED_JSON" >&2
+
+        INDICES_RAW=$(echo "$SELECTED_JSON" | jq -r '.index // ""' 2>/dev/null)
+        VALUES_RAW=$(echo "$SELECTED_JSON" | jq -r 'if .values then .values[].text else empty end' 2>/dev/null)
+        TEXT_RAW=$(echo "$SELECTED_JSON" | jq -r '.text // ""' 2>/dev/null)
+
+        if [ -n "$INDICES_RAW" ] && [ "$INDICES_RAW" != "null" ]; then
+            # -- Case A: index field -------------------------------------------
+            IFS=',' read -ra IDX_ARR <<< "$INDICES_RAW"
+            for idx in "${IDX_ARR[@]}"; do
+                idx="${idx// /}"
+                if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -lt "${#AVAILABLE[@]}" ]; then
+                    TARGETS+=("${AVAILABLE[$idx]}")
+                fi
+            done
+
+        elif [ -n "$VALUES_RAW" ]; then
+            # -- Case B: values array (Samsung OneUI / ZFlip7 confirmed) -------
+            # Samsung termux-api returns:
+            #   {"code":-1,"values":[{"index":2,"text":"climb"},...]}
+            # jq extracts .values[].text giving bare folder names, one per line.
+            # No annotation stripping needed -- .text contains the raw label
+            # without the (371x) or [zipped] suffixes we added to AVAILABLE_LABELS.
+            # Wait -- actually the label DOES include annotations since that is
+            # what was passed to -v. So we need to strip them here too.
+            while IFS= read -r val; do
+                # val may be "pistol (371x) [zipped]" or just "climb"
+                # Strip counter: everything from " (" onward
+                bare="${val% (*}"
+                # Strip zipped marker
+                bare="${bare% [zipped]}"
+                # Trim whitespace
+                bare="${bare#"${bare%%[! ]*}"}"
+                bare="${bare%"${bare##*[! ]}"}"
+                [ -n "$bare" ] && TARGETS+=("$bare")
+            done <<< "$VALUES_RAW"
+
+        elif [ -n "$TEXT_RAW" ] && [ "$TEXT_RAW" != "null" ]; then
+            # -- Case C: text field (older OneUI fallback) ---------------------
+            # .text contains comma-separated selected labels as a single string.
+            IFS=',' read -ra TEXT_ARR <<< "$TEXT_RAW"
+            for sel_text in "${TEXT_ARR[@]}"; do
+                sel_text="${sel_text#"${sel_text%%[! ]*}"}"
+                sel_text="${sel_text%"${sel_text##*[! ]}"}"
+                for i in "${!AVAILABLE_LABELS[@]}"; do
+                    lbl="${AVAILABLE_LABELS[$i]}"
+                    lbl="${lbl#"${lbl%%[! ]*}"}"
+                    lbl="${lbl%"${lbl##*[! ]}"}"
+                    if [ "$lbl" = "$sel_text" ]; then
+                        TARGETS+=("${AVAILABLE[$i]}")
+                        break
+                    fi
+                done
+            done
+
+        else
+            # -- No parseable selection -----------------------------------------
+            # All three field attempts returned empty. Either nothing was
+            # selected or the response format is unknown.
+            # Show the raw JSON so we can diagnose the actual field name.
+            echo -e "${YELLOW}Could not parse dialog selection.${RESET}"
+            echo -e "${GRAY}Raw response: $SELECTED_JSON${RESET}"
+            echo -e "${GRAY}Run: termux-dialog checkbox -t test -v a,b,c${RESET}"
+            echo -e "${GRAY}Select items, confirm, and share the output.${RESET}"
+            exit 0
+        fi
         ;;
 esac
 
-# -- Deduplicate - FIX: guard against empty TARGETS before printf ---------------
-if [ ${#TARGETS[@]} -gt 0 ]; then
+# Deduplicate TARGETS and remove any blank entries
+if [ "${#TARGETS[@]}" -gt 0 ]; then
     mapfile -t TARGETS < <(printf '%s\n' "${TARGETS[@]}" | grep -v '^$' | sort -u)
 fi
 
-# -- Header ---------------------------------------------------------------------
+# =============================================================================
+# HEADER
+# =============================================================================
 clear
 echo -e "${BOLD}"
 echo "  +==========================================+"
-echo "  |        BATCH BACKUP                      |"
+echo "  |        BATCH BACKUP  v3                  |"
 echo "  +==========================================+"
 echo -e "${RESET}"
 echo -e "${GRAY}  $(date '+%A %b %-d, %Y  %-I:%M %p')${RESET}"
-echo -e "${GRAY}  Mode: ${MODE}  |  Targets: ${#TARGETS[@]} folder(s)${RESET}\n"
+echo -e "${GRAY}  Mode: ${MODE}  |  Targets: ${#TARGETS[@]} folder(s)${RESET}"
+echo -e "${GRAY}  Threshold: counter >= $HOT_THRESHOLD = hot${RESET}\n"
 
-if [ ${#TARGETS[@]} -eq 0 ]; then
-    warn "No folders matched the selected mode - nothing to zip."
+if [ "${#TARGETS[@]}" -eq 0 ]; then
+    warn "No folders matched -- nothing to zip."
     parity_report
     exit 0
 fi
 
 echo -e "${GRAY}  Folders queued:${RESET}"
 for t in "${TARGETS[@]}"; do
-    zip_marker=""
-    has_zip "$t" && zip_marker="${DIM} (overwrites existing zip)${RESET}"
-    echo -e "    ${CYAN}.${RESET} ${t}${zip_marker}"
+    zip_status=""
+    if has_zip "$t"; then
+        zip_status="${DIM} [zipped -- will prompt merge/append/skip]${RESET}"
+    fi
+    echo -e "    ${CYAN}.${RESET} ${t}${zip_status}"
 done
 echo ""
 
-# -- Zip loop -------------------------------------------------------------------
+# =============================================================================
+# ZIP LOOP
+# =============================================================================
+# For each target folder, call zip_with_merge() which handles:
+#   - No existing zip: calls z_backup directly
+#   - Existing zip:    prompts for merge / append / skip
+#
+# Exit codes:
+#   z_backup returns 0 on success, 1 on failure
+#   zip_with_merge passes these through
+#   PASS/FAIL counters track results for the summary
+#
+# ((PASS++)) || true: the || true absorbs the non-zero exit from arithmetic
+# when PASS was 0 (0++ = 0 in arithmetic context, which bash treats as false
+# under set -e). Without || true, set -e would kill the script after the
+# first successful zip when PASS increments from 0 to 1.
+
 PASS=0; FAIL=0
 declare -a FAILED_FOLDERS=()
 
 for folder in "${TARGETS[@]}"; do
-    # Safety: skip any blank entries that slipped through
     [ -z "$folder" ] && continue
-    echo -e "${GRAY}  zipping ${folder}...${RESET}"
-    if z_backup "$folder"; then
-        ok "$folder"
+    echo -e "\n${GRAY}  Processing: ${folder}${RESET}"
+    if zip_with_merge "$folder"; then
         ((PASS++)) || true
     else
         fail "$folder"
@@ -331,9 +757,11 @@ for folder in "${TARGETS[@]}"; do
     fi
 done
 
-# -- Summary --------------------------------------------------------------------
+# =============================================================================
+# SUMMARY
+# =============================================================================
 echo ""
-echo -e "${BOLD}${CYAN}-- Summary -----------------------------------------${RESET}"
+header "Summary"
 echo -e "  ${GREEN}v Succeeded: ${PASS}${RESET}"
 if [ "$FAIL" -gt 0 ]; then
     echo -e "  ${RED}x Failed:    ${FAIL}${RESET}"
@@ -346,7 +774,7 @@ echo ""
 if [ "$FAIL" -eq 0 ]; then
     echo -e "${BOLD}${GREEN}"
     echo "  +==========================================+"
-    printf "  |   v  %d zip(s) written to Export/%-9s|\n" "$PASS" ""
+    printf "  |   v  %d operation(s) complete%-11s|\n" "$PASS" ""
     echo "  +==========================================+"
     echo -e "${RESET}"
     exit 0

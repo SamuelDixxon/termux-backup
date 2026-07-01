@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 184,
+      "counter": 197,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 82,
+      "counter": 86,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -31,13 +31,11 @@
       "name": "piano",
       "short_desc": "piano playing",
       "full_desc": "piano",
-      "counter": 3,
+      "counter": 8,
       "hashtags": [
         "#piano",
         "#music",
-        "#pianolessons",
-        "#classicalmusic",
-        "#pianoplayer"
+        "#pkeys"
       ]
     },
     {
@@ -45,7 +43,7 @@
       "name": "m",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 118,
+      "counter": 123,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -59,7 +57,7 @@
       "name": "skate",
       "short_desc": "longboarding",
       "full_desc": "longboarding",
-      "counter": 13,
+      "counter": 17,
       "hashtags": [
         "#longboarding",
         "#skateboarding",
@@ -73,7 +71,7 @@
       "name": "code",
       "short_desc": "coding education",
       "full_desc": "coding topics and education",
-      "counter": 7,
+      "counter": 8,
       "hashtags": [
         "#coding",
         "#programming",
@@ -185,7 +183,7 @@
       "name": "hike",
       "short_desc": "hiking adventures",
       "full_desc": "hiking videos",
-      "counter": 6,
+      "counter": 8,
       "hashtags": [
         "#hiking",
         "#outdoors",
@@ -241,7 +239,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 525,
+      "counter": 550,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -310,7 +308,7 @@
       "name": "auto",
       "short_desc": "automotive vids",
       "full_desc": "learning for automotive videos",
-      "counter": 5,
+      "counter": 4,
       "hashtags": [
         "#automotive",
         "#car",
@@ -349,7 +347,7 @@
       "name": "game",
       "short_desc": "games in general but exploring yt live games",
       "full_desc": "all sorts of fun in game space crossy road, pool, minecraft, and more",
-      "counter": 18,
+      "counter": 45,
       "hashtags": [
         "#videogame",
         "#play",
@@ -361,11 +359,24 @@
       "name": "integral",
       "short_desc": "practice solving integrals at integral.com",
       "full_desc": "integral practice post college and learning techniques",
-      "counter": 11,
+      "counter": 20,
       "hashtags": [
         "#integral",
         "#math",
         "#fyp"
+      ]
+    },
+    {
+      "id": 31,
+      "name": "spanish",
+      "short_desc": "chatting and getting algo update in tiktok",
+      "full_desc": "learning spanish via convo",
+      "counter": 2,
+      "hashtags": [
+        "#spanish",
+        "#espanol",
+        "#learnspanoissh",
+        "#secondlanguage"
       ]
     }
   ]
