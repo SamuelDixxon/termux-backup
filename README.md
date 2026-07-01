@@ -1,549 +1,543 @@
-# Termux Dev-Ops: Multi-Device Sync Ecosystem
+# termux-backup · Content Pipeline
 
 ![Shell](https://img.shields.io/badge/shell-bash-89e051?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.x-3572A5?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-Android%20%2F%20Termux-brightgreen?style=flat-square)
 ![Devices](https://img.shields.io/badge/devices-S23%2B%20%7C%20Pixel%209a%20%7C%20ZFlip7-blue?style=flat-square)
-![License](https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square)
 
-A robust, distributed post-shoot workflow for high-volume content creators managing
-multiple Android devices. Built entirely in **Termux** — no laptop, no cloud
-subscription, no desktop tools. The automation is the content.
+A session-driven, multi-source content pipeline running entirely on Android via Termux.
+No laptop. No cloud subscription. 25 min manual post-shoot workflow reduced to under 4 min automated.
 
-> **"I scripted my entire post-shoot workflow in Bash — 5 steps, one command, zero laptop.
-> What used to take 25 minutes now takes under 4."**
-> — Samuel Dixon, Product Test Engineer · Austin TX
+> Built by **Samuel Dixon** -- Product Test Engineer, Austin TX  
+> linktr.ee/sdixoninvesting -- @sdixoninvesting
 
 ---
 
 ## Table of Contents
 
-- [Architecture Overview](#architecture-overview)
-- [Storage Zones](#storage-zones)
-- [Pipeline](#pipeline)
-  - [Step 1 · org-camera-album](#step-1--org-camera-album)
-  - [Step 2 · batch-backup](#step-2--batch-backup)
-  - [Step 3 · backup-all](#step-3--backup-all)
-  - [Step 4 · manager](#step-4--manager)
-  - [Step 5 · transfer-export](#step-5--transfer-export)
+- [Architecture](#architecture)
+- [Pipeline v3 (current)](#pipeline-v3-current)
+- [Pipeline v4 (proposed)](#pipeline-v4-proposed)
 - [Component Deep Dives](#component-deep-dives)
-  - [batch-backup](#batch-backup-detail)
-  - [manager](#manager-detail)
-- [Utility Functions (.bashrc)](#utility-functions-bashrc)
-- [Component Complexity Summary](#component-complexity-summary)
-- [Design Decisions](#design-decisions)
+  - [batch-backup](#batch-backup)
+  - [segment_manager](#segment_manager)
+  - [z_backup internals](#z_backup-internals)
+  - [org-camera-album](#org-camera-album)
+- [Voice Control (proposed)](#voice-control-proposed)
+- [Storage Zones](#storage-zones)
+- [Utility Functions](#utility-functions)
 - [Installation](#installation)
 - [Dependencies](#dependencies)
 - [Raspberry Pi Setup](#raspberry-pi-setup)
+- [Changelog](#changelog)
 
 ---
 
-## Architecture Overview
-
-This system uses a **Shadow Repository** strategy to keep scripts and environment
-configs in sync across three devices via GitHub. Media files live on-device in
-Android shared storage, zipped to a canonical `Export/` directory, then transferred
-to long-term storage on SD cards or a Raspberry Pi.
+## Architecture
 
 ```mermaid
 flowchart LR
-    W([widget tap]) -->|one-tap route| A
-    Q([quick-copy]) -->|title+tags| D
-
-    A([org-camera-album\nv2: smart router]) -->|moves files| B([batch-backup])
-    B -->|zips to Export/| C([backup-all])
-    C -->|rsync + git push| D([manager\nv2: combined clipboard])
-    D -->|title+hashtags| E([transfer-export])
-
-    subgraph storage [Android Storage Zones]
-        direction TB
-        S1[DCIM/Camera\nraw shoot files]
-        S2[storage/shared/\nsegment folders]
-        S3[storage/shared/Export/\nzip archives]
-        S4[GitHub\ntermux-backup repo]
-        S5[SD card / Raspberry Pi\nlong-term archive]
+    subgraph devices [3 Android Devices]
+        D1[ZFlip7]
+        D2[S23+]
+        D3[Pixel 9a]
     end
 
-    subgraph clipboard [Clipboard Output]
-        direction TB
-        CL1[pistol50]
-        CL2[hashtags line]
+    subgraph pipeline [content-pipeline 5 steps]
+        P1[1 manager]
+        P2[2 batch-backup]
+        P3[3 backup-all]
+        P4[4 segment_manager]
+        P5[5 transfer-export]
     end
 
-    A -.->|reads| S1
-    A -.->|writes| S2
-    B -.->|reads| S2
-    B -.->|writes| S3
-    C -.->|syncs| S4
-    D -.->|reads/writes| S2
-    D -.->|writes| clipboard
-    E -.->|reads| S3
-    E -.->|writes| S5
+    subgraph storage [Storage]
+        G[GitHub
+termux-backup repo]
+        E[Export
+zips]
+        R[Raspberry Pi
+or SD card]
+    end
+
+    devices --> pipeline
+    P1 --> P2 --> P3 --> P4 --> P5
+    P3 -->|rsync + git| G
+    P2 -->|zip| E
+    P5 -->|SSH or USB| R
+    G -->|sync-in| devices
 ```
 
 ---
 
-## Storage Zones
+## Pipeline v3 (current)
 
-Android's filesystem presents two distinct zones with different permission models.
-Understanding this split is critical — it's the source of most path-related bugs.
-
-| Zone | Path | Access | Notes |
-|------|------|--------|-------|
-| Termux home | `~/` `/data/data/com.termux/files/home/` | Full POSIX | Scripts, config, git repos |
-| Shared storage | `~/storage/shared/` → `/sdcard/` | FUSE-mounted | Camera roll, segment folders, Export |
-| DCIM | `~/storage/shared/DCIM/Camera/` | FUSE + MediaStore | Raw shoot files, gallery trash |
-| Export | `~/storage/shared/Export/` | FUSE | Canonical zip archive location |
-
-> **FUSE gotcha:** Relative paths inside `DCIM/` can silently resolve to wrong
-> locations. Always use absolute paths when writing to Export. `zip -r path/to/output.zip .`
-> not `zip -r ../Export/output.zip *`.
-
----
-
-## Pipeline
-
-The full 5-step workflow is orchestrated by `content-pipeline`. Run it after every shoot:
+The current 5-step post-shoot workflow. Run with one command:
 
 ```bash
-~/.shortcuts/content-pipeline
+bash ~/.shortcuts/content-pipeline
 ```
 
-At step 2 you are prompted for backup mode:
-- `y` (default / Enter) — batch-hot: zips all high-volume segments automatically
-- `c` — custom: checkbox dialog to hand-pick folders
-- `n` — single: one-folder radio picker
+At step 2 you choose backup mode: `y` = batch-hot (default), `c` = custom select, `n` = single folder.
+
+```mermaid
+flowchart TD
+    START([content-pipeline]) --> S1
+
+    S1[Step 1
+org-camera-album
+DCIM to named folder]
+    S2[Step 2
+batch-backup
+zip to Export]
+    S3[Step 3
+backup-all
+rsync + GitHub]
+    S4[Step 4
+segment_manager
+hashtags to clipboard]
+    S5[Step 5
+transfer-export
+SD card or Pi]
+
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+    S4 --> S5
+
+    S2 -->|y| HOT[--hot
+auto-zip counter gte 50]
+    S2 -->|c| CUSTOM[interactive
+checkbox dialog]
+    S2 -->|n| SINGLE[backup-folder
+single picker]
+
+    HOT --> S3
+    CUSTOM --> S3
+    SINGLE --> S3
+```
 
 ---
 
-### Step 1 · org-camera-album
+## Pipeline v4 (proposed)
 
-**Purpose:** Move raw shoot files out of `DCIM/Camera` into a named segment folder in
-`storage/shared/`, then refresh the Android gallery via MediaStore.
+Key change: `segment_manager` moves to **step 1** so the selected segment name
+flows via `session.json` into every downstream step. No duplicate prompts.
 
-**v2 change -- smart auto-router:** Instead of always prompting for a typed name,
-the dialog now pre-populates with your **hot segments** (counter >= 50) at the top,
-then all other segments, then a "type new name" fallback. For daily recurring content
-like `pistol`, `skip`, `climb` -- one tap routes the files. Type only for new or
-one-off folders.
+```mermaid
+flowchart TD
+    subgraph session [Shared Session State]
+        SJ[session.json
+segment + counter + mode]
+    end
 
-```
-Widget tap -> radio dialog (hot segments first) -> one tap -> files moved
-                                                -> "new name" -> text input
-DCIM/Camera/  -->  storage/shared/<segment>/
-                   + termux-media-scan on both paths
-```
+    subgraph sources [Media Sources - org-collect NEW]
+        S1[DCIM/Camera]
+        S2[Instagram Edits]
+        S3[Quick Share BLE]
+        S4[Downloads]
+        S5[Screenshots]
+    end
 
-**Why this matters:** At high shooting volume (daily pistol squats, climb sessions)
-the old typed-name flow added friction every single time. The router eliminates
-that for segments you use constantly.
+    subgraph modes [Folder Naming Mode]
+        M1[incremental
+pistol/ skip/]
+        M2[episode
+m111/ mcp99/]
+        M3[dated
+hike_20260615/]
+    end
 
----
+    P1([1 segment_manager
+pick segment + mode]) -->|writes| SJ
+    P2([2 org-collect NEW
+gather all sources])
+    P3([3 batch-backup
+zip to Export])
+    P4([4 backup-all
+GitHub sync])
+    P5([5 transfer-export
+SD or Pi])
 
-### Step 2 · batch-backup
+    SJ -->|reads| P2
+    SJ -->|reads| P3
 
-**Purpose:** Zip all segment folders from `storage/shared/` into
-`storage/shared/Export/`. Replaces the old single-folder `backup-folder` dialog as
-the default pipeline step.
-
-**Modes:**
-
-| Flag | Behaviour |
-|------|-----------|
-| *(none)* | Interactive checkbox — pick any folders |
-| `--hot` | Auto-zip all segments with `counter >= 50` |
-| `--all` | Zip every segment that has a matching folder |
-| `--unzipped` | Zip only segments with no existing zip in Export |
-
-**Segment parity report** runs after every backup and shows:
-- Folders with no zip yet (unbacked)
-- Segments in `segments_data.json` with no folder on device
-
-See [batch-backup detail](#batch-backup-detail) for full flow diagrams.
-
----
-
-### Step 3 · backup-all
-
-**Purpose:** Mirror `.shortcuts/` and `.bashrc` to the `termux-backup` GitHub repo
-via rsync + git push. Non-interactive and fully automatic.
-
-```bash
-# What it does internally:
-rsync -av --delete --exclude=".git" ~/.shortcuts/ ~/termux-backup/.shortcuts/
-cp ~/.bashrc ~/termux-backup/.bashrc
-cd ~/termux-backup && git add -A && git commit -m "Sync from <device>" && git push
+    S1 & S2 & S3 & S4 & S5 --> P2
+    P2 -->|incremental| M1
+    P2 -->|episode| M2
+    P2 -->|dated| M3
+    M1 & M2 & M3 --> P3
+    P3 --> P4 --> P5
 ```
 
-**Shadow repo strategy:** `rsync --delete` enforces a true 1:1 mirror. If you delete
-a script from `.shortcuts/`, the deletion is reflected in the repo on the next push.
-When another device runs `sync-in`, it pulls the deletion too. No ghost files.
+### session.json schema
 
-**Device tagging:** Commit messages include `getprop ro.product.model` so you can see
-which device last synced in the git log.
-
----
-
-### Step 4 · manager
-
-**Purpose:** Search your content series hashtag database, copy hashtags to clipboard,
-and auto-increment the usage counter. The counter feeds `--hot` targeting in
-`batch-backup` — passively self-tuning backup priority.
-
-**Launched as:** `python ~/.shortcuts/.hidden/segment_manager.py`
-
-**Data file:** `~/.shortcuts/.hidden/segments_data.json`
-
-See [manager detail](#manager-detail) for full REPL and data model diagrams.
-
----
-
-### Step 5 · transfer-export
-
-**Purpose:** Copy `storage/shared/Export/` zips to long-term storage — either a
-physical SD card via USB-C adapter, or a Raspberry Pi over the home network.
-
-**Transport priority:**
-
-```
-1. SSH + rsync  (primary — delta transfers, no plaintext credentials)
-2. FTP via ncftp (fallback — if SSH unreachable)
+```json
+{
+  "segment": "pistol",
+  "counter": 181,
+  "mode": "incremental",
+  "timestamp": "2026-06-15T14:30:00"
+}
 ```
 
-**Wired path:** Auto-detects USB-C SD card mount under `/storage/XXXX-XXXX/`.
-Prompts for SD label (SD1-fitness, SD2-code, etc.) before writing.
-
-**Wireless path:** Prompts for Pi IP if not yet configured. After first run,
-set `PI_IP` in the config block at the top of `transfer-export` to avoid
-the prompt on subsequent runs.
-
-> **Pre-requisite:** Run `ssh-copy-id pi@<PI_IP>` from Termux once to authorize
-> passwordless SSH from your phone to the Pi.
+| mode | folder | use case |
+|------|--------|----------|
+| `incremental` | `pistol/` | open-ended series, files accumulate |
+| `episode` | `m111/` | numbered series, each shoot discrete |
+| `dated` | `hike_20260615/` | one-off or travel content |
 
 ---
 
 ## Component Deep Dives
 
-### batch-backup {#batch-backup-detail}
+### batch-backup
 
-#### Mode selection flow
+Four run modes. The core workhorse of the pipeline.
 
 ```mermaid
 flowchart TD
-    START([batch-backup called]) --> PRE[preflight check\nzip / python3 / jq / termux-dialog]
-    PRE -->|missing pkg| FAIL_PRE([exit 1\npkg install hint])
-    PRE -->|all present| LOAD[parse segments_data.json\nbuild SEG_NAMES + SEG_COUNTERS arrays]
-    LOAD --> MODE{mode arg?}
+    LAUNCH([batch-backup called]) --> ENV[set HOME + PATH
+widget safety guard]
+    ENV --> SRC[source .bashrc OR true
+prevents set -e silent exit]
+    SRC --> PRE[preflight
+zip python3 jq termux-dialog]
+    PRE --> PARSE[parse segments_data.json
+build SEG_NAMES + SEG_COUNTERS]
+    PARSE --> MODE{argument?}
 
-    MODE -->|--hot| HOT[filter segments\ncounter >= 50]
-    MODE -->|--all| ALL[all segments with\na matching folder]
-    MODE -->|--unzipped| UNZ[segments with folder\nbut no zip in Export/]
-    MODE -->|interactive| DLG[termux-dialog checkbox\nshow all available folders]
+    MODE -->|--hot| HOT[segments counter gte 50
+auto-targets no dialog]
+    MODE -->|--all| ALL[all segment-matched
+folders no dialog]
+    MODE -->|--unzipped| UNZ[folders with
+no zip yet]
+    MODE -->|none| DLG[termux-dialog checkbox
+all shared/ folders]
 
-    HOT --> RESOLVE
-    ALL --> RESOLVE
-    UNZ --> RESOLVE
-    DLG -->|code -2 = cancel| CANCEL([exit 0])
-    DLG -->|selections made| PARSE[parse index field\nfallback: parse text field\nSamsung OneUI compat]
-    PARSE --> RESOLVE
+    DLG -->|Samsung values field| VPARSE[parse values text field
+strip annotations]
+    DLG -->|standard index field| IPARSE[jq .index
+validate bounds]
+    DLG -->|text fallback| TPARSE[jq .text
+trim + match labels]
+    DLG -->|code -2| CANCEL([exit 0 cancelled])
 
-    RESOLVE[resolve_folders per segment\nexact + digit-suffix + short-alias match]
-    RESOLVE --> DEDUP[deduplicate + filter empty strings]
-    DEDUP --> EMPTY{any targets?}
-    EMPTY -->|no| PARITY[parity report only]
-    PARITY --> EXIT0([exit 0])
-    EMPTY -->|yes| LOOP
+    HOT & ALL & UNZ --> TARGETS
+    VPARSE & IPARSE & TPARSE --> TARGETS
+
+    TARGETS[deduplicate
+filter blanks] --> LOOP
 
     subgraph LOOP [zip loop]
-        direction TB
-        L1[for each folder] --> L2[z_backup folder]
-        L2 -->|success| L3[PASS++\nprint size]
-        L2 -->|fail| L4[FAIL++\nadd to FAILED list]
-        L3 --> L5{more folders?}
-        L4 --> L5
-        L5 -->|yes| L1
-        L5 -->|no| SUMMARY
+        F[for each folder] --> HZ{has existing zip?}
+        HZ -->|no| ZB[z_backup direct
+new timestamped zip]
+        HZ -->|yes| PROMPT[prompt
+m merge / a append / s skip]
+        PROMPT -->|merge| MRG[extract + combine
+re-zip merged_timestamp.zip
+delete old zip]
+        PROMPT -->|append| APP[z_backup
+new zip alongside existing]
+        PROMPT -->|skip| SKIP[leave untouched]
+        ZB & MRG & APP & SKIP --> NEXT{more?}
+        NEXT -->|yes| F
+        NEXT -->|no| SUMMARY
     end
 
-    SUMMARY[print summary\nSucceeded / Failed counts] --> PARITY2[parity report\nshows unbacked segments]
-    PARITY2 --> RESULT{FAIL == 0?}
-    RESULT -->|yes| OK([exit 0])
-    RESULT -->|no| ERR([exit 1\npipeline halts])
+    SUMMARY[print summary
+PASS FAIL counts] --> PARITY[parity report
+unbacked segments]
 ```
 
-#### resolve_folders matching strategy
+**Known issue:** checkbox dialog (`none` mode) confirmed showing on ZFlip7 but
+selection not zipping. Root cause: Samsung returns
+`values: [{index:N, text:"name"}]` not a flat array. Fix in v3: `parse values text field`.
+Status: deployed, awaiting test confirmation.
 
-Segment names don't always match folder names 1:1. The `resolve_folders` function
-uses a four-tier matching strategy to handle real-world naming conventions:
-
-```mermaid
-flowchart TD
-    IN([segment name e.g. mcp]) --> E1{shared/mcp\nexists?}
-    E1 -->|yes| ADD1[add: mcp]
-    E1 -->|no| E2
-
-    E2[scan all dirs in shared/] --> E3{name + digits?\ne.g. mcp96 mcp98}
-    E3 -->|match| ADD2[add: mcp96 mcp98]
-    E3 -->|no match| E4
-
-    E4{single letter + digits?\ne.g. m81 m90-m99} --> E5{first char matches\nAND segment len <= 4?}
-    E5 -->|yes| ADD3[add: m81 m90...m99]
-    E5 -->|no| E6
-
-    E6{DCIM/mcp\nexists?} -->|yes| ADD4[add: mcp via DCIM path]
-    E6 -->|no| DONE2
-
-    ADD1 --> DONE[sort -u\nreturn unique list]
-    ADD2 --> DONE
-    ADD3 --> DONE
-    ADD4 --> DONE
-    DONE2([no matches\nreturn empty])
-```
-
-**Real-world example** — segment `mcp` matches all of:
-`mcp/` `mcp96/` `mcp98/` `m81/` `m90/` `m91/` ... `m99/`
-
-#### z_backup internals
-
-```mermaid
-flowchart TD
-    IN2([z_backup folder-name]) --> BIN[locate zip binary\nfull Termux path first\nfallback: command -v zip]
-    BIN -->|not found| FAIL2([exit 1\npkg install zip])
-    BIN -->|found| RES[resolve src path\nshared/ first\nthen DCIM/]
-    RES -->|not found| FAIL3([exit 1])
-    RES -->|found| EMPTY2{ls -A src\nempty?}
-    EMPTY2 -->|yes| SKIP([return 0\nSKIPPED warning])
-    EMPTY2 -->|no| MKDIR[mkdir -p Export/]
-    MKDIR --> ZIP[cd into src\nzip -9 -r zip_path .]
-    ZIP -->|exit 0| SIZE[du -sh zip\nprint size + path]
-    ZIP -->|exit != 0| CLEAN[rm partial zip\nreturn 1]
-    SIZE --> OK2([return 0])
-```
-
-> **Why `zip -r .` not `zip *`:**  
-> The `*` glob fails when a folder is empty, skips subdirectories, and chokes on
-> filenames with spaces. `zip -9 -r "$zip_path" .` recurses everything from the
-> current directory unconditionally and always exits 0 on a non-missing path.
-
-> **Why hardcode the zip binary path:**  
-> Scripts sourced from `batch-backup` inherit a reduced `$PATH`. Hardcoding
-> `/data/data/com.termux/files/usr/bin/zip` ensures the binary is found regardless
-> of invocation context — interactive terminal, Termux Widget shortcut, or Termux:Boot.
+**Merge/append/skip** -- tested and working on ZFlip7. When a folder already
+has a zip in Export/, you are prompted:
+- `m` merge: extract + combine files + re-zip as single archive
+- `a` append: new timestamped zip alongside existing (default)
+- `s` skip: leave existing untouched
 
 ---
 
-### manager {#manager-detail}
+### segment_manager
 
-#### Top-level REPL loop
+Python REPL. The counter drives `--hot` targeting in batch-backup passively.
 
 ```mermaid
 flowchart TD
-    START2([python3 segment_manager.py]) --> LOAD2[load segments_data.json\ndefault data if missing/corrupt]
-    LOAD2 --> PCHECK[parity check on startup\nwarn on unbacked segments]
-    PCHECK --> MENU
+    LAUNCH2([segment_manager.py]) --> LOAD[load segments_data.json]
+    LOAD --> PCHECK[parity check on startup
+warn on unbacked hot segments]
+    PCHECK --> QMODE{--quick flag?}
+    QMODE -->|yes| QUICK[show hot segments
+2 inputs max
+clipboard ready]
+    QMODE -->|no| MENU
 
-    subgraph MENU [main menu loop]
-        direction TB
-        M0[print menu\nsorted by usage least to most] --> INPUT{user input}
-        INPUT -->|1| SEARCH[Search and Copy]
-        INPUT -->|2| ADD[Add new series]
-        INPUT -->|3| EDIT[Edit series]
-        INPUT -->|4| DELETE[Delete series]
-        INPUT -->|5| LIST[List all + stats]
-        INPUT -->|q| QUIT([exit 0])
-        SEARCH --> SAVE[save_data\ncounter += 1]
-        ADD --> SAVE
-        EDIT --> SAVE
-        DELETE --> SAVE
+    subgraph MENU [main REPL loop]
+        M0[print menu
+sorted by counter] --> INPUT{choice}
+        INPUT -->|1| SEARCH[search and copy]
+        INPUT -->|2| QUICK2[quick copy hot]
+        INPUT -->|3| ADD[add series]
+        INPUT -->|4| EDIT[edit series]
+        INPUT -->|5| DELETE[delete series]
+        INPUT -->|6| LIST[list all + stats]
+        INPUT -->|q| QUIT([exit])
+        SEARCH & QUICK2 & ADD & EDIT & DELETE --> SAVE[save_data
+counter++]
         SAVE --> M0
-        LIST --> M0
     end
+
+    subgraph CLIP [Clipboard Output]
+        CL1[pistol181
+title label line 1]
+        CL2[hashtags
+all platforms line 2]
+    end
+
+    SEARCH --> PLAT{platform?}
+    PLAT -->|YouTube| YT[15 tags + boosters]
+    PLAT -->|Instagram| IG[30 tags + boosters]
+    PLAT -->|TikTok| TT[10 tags + boosters]
+    PLAT -->|All| ALL2[15 tags default]
+    YT & IG & TT & ALL2 --> CLIP
 ```
 
-#### Search and Copy flow (option 1 — most used path)
+---
+
+### z_backup internals
 
 ```mermaid
 flowchart TD
-    S1([user picks option 1]) --> S2[prompt: search term\nEnter = show all]
-    S2 --> S3[filter segments by\nname or short_desc match]
-    S3 --> S4{any results?}
-    S4 -->|no| S5([print: no matches\nback to menu])
-    S4 -->|yes| S6[display filtered list\nsorted by counter asc\nbadge NEW if 0 / HOT if >=50]
-    S6 --> S7[user picks number]
-    S7 -->|invalid| S8([back to menu])
-    S7 -->|valid| S9[print full_desc\nprint hashtags]
-    S9 --> S10[termux-clipboard-set hashtags]
-    S10 --> S11[counter += 1\nsave_data]
-    S11 --> S12([back to menu\ncounter drives --hot targeting\nin batch-backup])
+    IN([z_backup folder]) --> BIN[locate zip binary
+full Termux path
+fallback command -v]
+    BIN -->|not found| FAIL([exit 1
+pkg install zip])
+    BIN -->|found| RES[resolve src
+shared/ first
+then DCIM/]
+    RES -->|not found| FAIL2([exit 1])
+    RES -->|found| EMPTY{ls -A src
+empty?}
+    EMPTY -->|yes| SKIP2([return 0
+SKIPPED])
+    EMPTY -->|no| ZIP[cd src
+zip -9 -r zip_path .]
+    ZIP -->|exit 0| SIZE[print size + path]
+    ZIP -->|fail| CLEAN[rm partial
+return 1]
 ```
 
-#### Data model
+**Why `zip -r .` not `zip *`:**
+The `*` glob fails on empty dirs, skips subdirectories, and errors on
+filenames with spaces. `zip -9 -r "$zip_path" .` recurses everything
+unconditionally. Exit code 127 = zip binary not in PATH -- fix: `pkg install zip`.
+
+---
+
+### org-camera-album
 
 ```mermaid
-erDiagram
-    SEGMENTS_DATA {
-        list segments
-    }
-    SEGMENT {
-        int id PK
-        string name
-        string short_desc
-        string full_desc
-        int counter
-        list hashtags
-    }
-    SEGMENTS_DATA ||--o{ SEGMENT : contains
+flowchart TD
+    LAUNCH3([org-camera-album]) --> COUNT[count files
+in DCIM/Camera]
+    COUNT -->|0 files| TOAST([termux-toast empty])
+    COUNT -->|files found| BUILDLIST[build radio list
+from segments_data.json]
+    BUILDLIST --> HOT2[hot segments
+counter gte 50 at top]
+    HOT2 --> OTHER[all other segments
+counter desc]
+    OTHER --> NEW[-- type new name --
+as last option]
+    NEW --> DIALOG[termux-dialog radio
+Route N files to...]
+    DIALOG -->|cancelled| EXIT2([exit 0])
+    DIALOG -->|hot segment| STRIP[strip counter annotation
+pistol 371x -> pistol]
+    DIALOG -->|new name| TEXTINPUT[termux-dialog text
+enter folder name]
+    STRIP & TEXTINPUT --> MOVE[mkdir -p destination
+mv media files]
+    MOVE --> SCAN[termux-media-scan -r
+source + destination]
+    SCAN --> DONE2([termux-toast moved N files])
 ```
 
-**Active segments by usage** (as of last sync):
+**v4 proposed -- org-collect:** Extends this to pull from 6 sources
+(DCIM, Instagram Edits, Quick Share, Downloads, Screenshots, CapCut)
+in a single pass, reading destination from `session.json`.
 
-| Counter | Segment | Description |
-|---------|---------|-------------|
-| 371 | `pistol` | pistol squats |
-| 125 | `boulder` | rock climbing |
-| 100 | `mcp` | push/pull/legs gym split |
-| 68 | `skip` | jump rope |
-| 48 | `ball` | basketball |
-| 27 | `box` | boxing |
-| 26 | `stands` | handstands |
-| 24 | `mcped` | educational gym content |
-| 13 | `skate` | longboarding |
-| ... | *(18 more)* | |
+---
 
-> Segments with `counter >= 50` are automatically targeted by `batch-backup --hot`.
-> The counter increments passively on every hashtag copy — no manual configuration needed.
+## Voice Control (proposed)
+
+Reduce friction for high-volume daily content. Instead of widget taps
+and text input, speak the segment name and command.
+
+```mermaid
+flowchart TD
+    subgraph tier1 [Tier 1 - Available Now]
+        V1[termux-speech-to-text
+Android built-in STT
+requires internet]
+    end
+
+    subgraph tier2 [Tier 2 - Recommended Next]
+        V2[whisper.cpp offline
+ggml-base.en model
+~40MB no internet]
+    end
+
+    subgraph tier3 [Tier 3 - Future]
+        V3[wake word detection
+continuous listening
+hands-free]
+    end
+
+    V1 & V2 & V3 --> VSCRIPT[voice-command.sh
+parse spoken text]
+
+    VSCRIPT --> VCMD{command
+recognised?}
+    VCMD -->|pistol hot backup| BBHOT[batch-backup --hot]
+    VCMD -->|pistol route files| OCA[org-camera-album]
+    VCMD -->|run pipeline| PIPE[content-pipeline]
+    VCMD -->|backup all| BALL[backup-all]
+    VCMD -->|unknown| TTS[termux-tts-speak
+did not understand]
+
+    BBHOT & OCA & PIPE & BALL --> CONFIRM[termux-tts-speak
+confirmation]
+```
+
+### Tier 1 -- termux-speech-to-text (start here)
+
+Already available if `termux-api` is installed:
+
+```bash
+pkg install termux-api
+
+# Test it:
+termux-speech-to-text
+# speak "pistol hot backup"
+# outputs: pistol hot backup
+```
+
+### Tier 2 -- whisper.cpp offline (recommended)
+
+Build whisper.cpp on device, download the base.en model (~40MB),
+record audio with `ffmpeg`, and transcribe locally without internet.
+The ZFlip7's Exynos 2500 handles the base model in under 3 seconds.
+
+```bash
+pkg install git cmake clang make ffmpeg
+git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git
+cd whisper.cpp
+cmake -B build && cmake --build build -j4
+bash models/download-ggml-model.sh base.en
+```
+
+### voice-command.sh (to build)
+
+```bash
+#!/data/data/com.termux/files/usr/bin/bash
+# Record 3 seconds, transcribe, route to pipeline component
+ffmpeg -f android_mic -t 3 /tmp/voice.wav -y 2>/dev/null
+WORDS=$(~/whisper.cpp/build/bin/whisper-cli         -m ~/whisper.cpp/models/ggml-base.en.bin         -f /tmp/voice.wav --no-timestamps -otxt 2>/dev/null)
+
+case "${WORDS,,}" in
+    *pipeline*)      bash ~/.shortcuts/content-pipeline ;;
+    *hot*backup*)    bash ~/.shortcuts/batch-backup --hot ;;
+    *route*|*album*) bash ~/.shortcuts/org-camera-album ;;
+    *sync*|*github*) bash ~/.shortcuts/backup-all ;;
+    *)  termux-tts-speak "Did not understand: $WORDS" ;;
+esac
+```
+
+### Other efficiency ideas
+
+| Idea | Mechanism | Effort |
+|------|-----------|--------|
+| Voice-triggered pipeline | `termux-speech-to-text` + keyword routing | Low |
+| Offline transcription | `whisper.cpp` base.en model | Medium |
+| Auto-route on file detect | `inotifywait` watches DCIM, triggers org-camera-album | Medium |
+| Garmin/Strava auto-tag | Parse .fit file date, match to segment folder by timestamp | Medium |
+| Batch post scheduler | Write post queue to JSON, cron job copies hashtags at scheduled times | Medium |
+| Wear OS / Galaxy Watch | Tap watch face to trigger widget shortcuts via Bluetooth | High |
+
+---
+
+## Storage Zones
+
+| Zone | Path | Access | Notes |
+|------|------|--------|-------|
+| Termux home | `~/` | Full POSIX | Scripts, config, git repos |
+| Shared storage | `~/storage/shared/` | FUSE-mounted | Camera roll, segments, Export |
+| DCIM | `~/storage/shared/DCIM/Camera/` | FUSE + MediaStore | Raw shoot files |
+| Export | `~/storage/shared/Export/` | FUSE | Canonical zip output |
+
+**FUSE gotcha:** `zip *` silently fails inside DCIM. Always use absolute
+paths and `zip -r .` from inside the source folder.
+
+**Samsung Android 16 gotcha:** `find -not -path` returns empty results.
+Use bash `[[ "$f" == .* ]]` inside the loop instead.
 
 ---
 
 ## Utility Functions (.bashrc)
 
-Functions sourced into every shell session and available to all scripts.
+| Function | Alias | Purpose |
+|----------|-------|---------|
+| `z_backup folder` | `zb` | Zip named folder to Export/ |
+| `z_restore folder` | `zr` | Restore newest zip back to shared/ |
+| `clean_termux` | `clean-termux` | Clean 5 junk zones (apt cache, trash, pip, tmp) |
+| `empty_gallery_trash` | `empty-gallery-trash` | Remove Android MediaStore trash bypass 30-day hold |
+| `seg_status` | `segstat` | Table: all segments with counter, folder exists, zipped |
+| `export_summary` | `exsum` | List all zips in Export/ with sizes and dates |
+| `seg_add name desc tags` | `segadd` | Add segment without opening REPL |
+| `mkshot name` | `mks` | Create segment folder + optionally move DCIM files |
+| `pkg_check` | `pkgcheck` | Verify all required packages installed |
+| `termux_info` | `tinfo` | One-screen: battery, WiFi, storage, segment count |
+| `lsclip path` | `lsc` | List folder tree + copy to clipboard for sharing |
+| `debug_folder name` | `dbf` | Full audit: permissions, file types, zip status, segment match |
+| `gc_empty` | `gcempty` | Remove empty dirs from shared/ (GUI-deleted folders) |
 
-### z_backup
-
-Zip a named folder from `storage/shared/` to `storage/shared/Export/`.
-Resolves paths in `shared/` first, falls back to `DCIM/` subfolders.
-
-```bash
-z_backup pistol          # zips ~/storage/shared/pistol/
-z_backup Camera          # zips ~/storage/shared/DCIM/Camera/
-zb pistol                # alias
-```
-
-### z_restore
-
-Unzip the newest backup of a named folder back to its original location.
-
-```bash
-z_restore pistol         # restores from newest pistol_*.zip
-zr pistol                # alias
-```
-
-### clean_termux
-
-Clean five junk zones that accumulate silently:
-`~/.local/share/Trash/` · `$PREFIX/var/cache/apt/archives/` ·
-`$PREFIX/tmp/` · `~/.cache/pip/` · `~/storage/shared/.Trash-*/`
+### Pipeline shortcuts
 
 ```bash
-clean-termux             # scan → confirm → wipe
-clean-termux --dry       # show sizes only
-clean-termux --force     # skip confirmation
+pipeline    # full 5-step content-pipeline
+bb          # batch-backup interactive
+bbhot       # batch-backup --hot
+bball       # batch-backup --all
+bbunzipped  # batch-backup --unzipped
+mgr         # segment_manager.py
+syncup      # backup-all
+transfer    # transfer-export
+segstat     # segment status table
+exsum       # export summary
 ```
-
-### empty_gallery_trash
-
-Remove Android gallery trash (files hidden by MediaStore `IS_TRASHED=1` flag).
-Bypasses the 30-day cooldown and fires `termux-media-scan` to clear phantom
-gallery thumbnails.
-
-```bash
-empty-gallery-trash              # scan → warn → confirm → delete
-empty-gallery-trash --dry        # preview only
-empty-gallery-trash --force      # no prompt (use after batch backup)
-```
-
----
-
-## Component Complexity Summary
-
-| Script | Lines | Mode | Complexity driver |
-|--------|-------|------|-------------------|
-| `batch-backup` | ~390 | bash | 4 run modes, folder resolution strategies, Samsung OneUI dialog compat, pipeline exit codes |
-| `segment_manager.py` | ~200 | python REPL | stateful counter, CRUD, clipboard integration, parity check |
-| `transfer-export` | ~200 | bash | dual transport SSH/rsync + FTP fallback, USB mount auto-detect, SD label routing |
-| `content-pipeline` | ~180 | bash | 5-step orchestration, exit code propagation, y/c/n branching at step 2 |
-| `org-camera-album` | ~50 | bash | FUSE path resolution, termux-media-scan dual-dir refresh |
-| `backup-all` | ~30 | bash | rsync --delete mirror + git diff detection + device tagging |
-| `z_backup` (.bashrc) | ~45 | bash func | binary path resolution, recursive zip, empty folder guard, size reporting |
-| `clean_termux` (.bashrc) | ~80 | bash func | 5-zone audit, colour-coded size report, apt autoremove |
-| `empty_gallery_trash` (.bashrc) | ~70 | bash func | MediaStore dotfile detection, media-scan notification |
-
----
-
-## Design Decisions
-
-**Decomposable scripts over a monolith**
-
-Each script exits with a meaningful code and runs standalone or inside
-`content-pipeline`. You can test `z_backup pistol` without running the full
-pipeline. Failures halt at the exact failing step with a clear message. This
-also means each component can be recorded as a standalone YouTube episode.
-
-**segments_data.json drives backup priority**
-
-The `counter` field is a passive usage signal — every hashtag copy in `manager`
-increments it. `--hot` targeting in `batch-backup` is therefore self-tuning:
-high-volume series surface automatically. No manual priority lists to maintain.
-
-**Why SSH over FTP for Pi transfer**
-
-rsync over SSH gives delta transfers (only changed bytes), connection reuse,
-and no plaintext credentials on the wire. FTP is kept as a fallback only
-because `vsftpd` is simpler to set up headlessly before SSH keys are exchanged.
-
-**Why full Termux binary paths in z_backup**
-
-Scripts sourced from `batch-backup` inherit a reduced `$PATH`. Hardcoding
-`/data/data/com.termux/files/usr/bin/zip` ensures the binary resolves regardless
-of invocation context — interactive terminal, Termux Widget shortcut, or Termux:Boot.
-The function probes the hardcoded path first, falls back to `command -v zip`, and
-prints `pkg install zip` if neither works.
-
-**Why the Shadow Repo strategy**
-
-Standard git repos don't handle Termux's live `.shortcuts/` directory well —
-you'd have to work directly inside the repo. The shadow approach lets scripts
-live at their natural paths (`~/.shortcuts/`) while `backup-all` mirrors them
-into `~/termux-backup/` for git tracking. `rsync --delete` ensures deletions
-propagate. Any device that runs `sync-in` gets an exact replica.
 
 ---
 
 ## Installation
 
 ```bash
-# 1. Install dependencies
 pkg update && pkg install git rsync python jq zip termux-api
-
-# 2. Grant storage access
 termux-setup-storage
-
-# 3. Clone the repo
 git clone https://github.com/SamuelDixxon/termux-backup ~/termux-backup
-
-# 4. Install scripts and config
 cp ~/termux-backup/.shortcuts/* ~/.shortcuts/
 cp ~/termux-backup/.bashrc ~/.bashrc
-
-# 5. Load functions and aliases
 source ~/.bashrc
-
-# 6. Make scripts executable (required for Termux Widget green icon)
 chmod +x ~/.shortcuts/*
-
-# 7. Verify z_backup works
-zb pistol
 ```
 
 ---
@@ -553,242 +547,66 @@ zb pistol
 | Package | Install | Used by |
 |---------|---------|---------|
 | `zip` | `pkg install zip` | z_backup, batch-backup |
-| `python` | `pkg install python` | manager (segment_manager.py) |
+| `python3` | `pkg install python` | segment_manager, batch-backup |
 | `jq` | `pkg install jq` | batch-backup, backup-folder |
 | `rsync` | `pkg install rsync` | backup-all, transfer-export |
 | `git` | `pkg install git` | backup-all, sync-in |
-| `termux-api` | `pkg install termux-api` | org-camera-album, backup-folder, manager |
-| `openssh` | `pkg install openssh` | transfer-export (SSH to Pi) |
-| `ncftp` | `pkg install ncftp` | transfer-export (FTP fallback) |
-
-> **Note:** `zip` is not installed by default in Termux. If `z_backup` exits with
-> code 127, run `pkg install zip`.
+| `termux-api` | `pkg install termux-api` | dialogs, clipboard, media-scan |
+| `openssh` | `pkg install openssh` | transfer-export Pi SSH |
+| `ncftp` | `pkg install ncftp` | transfer-export FTP fallback |
+| `ffmpeg` | `pkg install ffmpeg` | thumbnail-writer (v4) |
 
 ---
 
 ## Raspberry Pi Setup
 
-The wireless path in `transfer-export` targets a headless Raspberry Pi on your
-home network.
-
-**One-time Pi configuration:**
-
 ```bash
-# On the Pi — enable SSH and install rsync
-sudo apt update && sudo apt install rsync openssh-server -y
+# On Pi:
+sudo apt install rsync openssh-server -y
 sudo systemctl enable ssh && sudo systemctl start ssh
+# Set static IP in /etc/dhcpcd.conf:
+#   static ip_address=192.168.1.100/24
 
-# Set a static IP (edit /etc/dhcpcd.conf):
-# interface wlan0
-# static ip_address=192.168.1.100/24
-# static routers=192.168.1.1
+# From Termux:
+ssh-keygen -t ed25519
+ssh-copy-id pi@192.168.1.100
 
-# Optional: FTP fallback
-sudo apt install vsftpd -y
-sudo systemctl enable vsftpd && sudo systemctl start vsftpd
-```
-
-**From Termux on the phone — authorize SSH key:**
-
-```bash
-pkg install openssh
-ssh-keygen -t ed25519          # generate key if needed
-ssh-copy-id pi@192.168.1.100   # passwordless from here on
-```
-
-**Update `transfer-export` config block:**
-
-```bash
+# Update transfer-export config:
 PI_USER="pi"
-PI_IP="192.168.1.100"          # your Pi's static IP
+PI_IP="192.168.1.100"
 PI_DEST="/home/pi/sd-archive"
 ```
 
 ---
 
-## Author
-
-**Samuel Dixon** · Product Test Engineer · Austin, TX  
-[linktr.ee/sdixoninvesting](https://linktr.ee/sdixoninvesting) · [sdixoninvesting@gmail.com](mailto:sdixoninvesting@gmail.com)
-
-*Outdoors · Tech · Fitness · Education*
-
----
-
 ## Changelog
 
-All notable changes to the termux-backup content pipeline are documented here.
-Format: `[vX.Y] YYYY-MM-DD - Component - Description`
-Status: `tested` | `partial` | `pending`
+| Version | Date | Component | Status | Summary |
+|---------|------|-----------|--------|---------|
+| v3.1 | 2026-06 | batch-backup | partial | Samsung `values` field parsing fix for checkbox dialog |
+| v3.0 | 2026-06 | batch-backup | partial | Merge/append/skip logic -- merge tested working |
+| v3.0 | 2026-06 | batch-backup | partial | Full inline documentation + Android 16 find fix |
+| v2.1 | 2026-06 | backup-all | deployed | sync_history.csv logging on every run |
+| v2.0 | 2026-05 | segment_manager | tested | Combined clipboard: title+hashtags, --quick mode, platform modes |
+| v2.0 | 2026-05 | org-camera-album | tested | Smart auto-router: hot segments first, one-tap routing |
+| v2.0 | 2026-05 | batch-backup | partial | All-folders dialog, Samsung cancel detection, HOME/PATH guard |
+| v1.0 | 2026-04 | content-pipeline | tested | Initial 5-step pipeline, --hot working across ZFlip7 |
+
+### Known issues
+
+- `batch-backup` interactive checkbox: dialog shows and folders listed correctly.
+  Confirm button triggers cancel. Fix deployed (v3.1 `parse values text field`).
+  **Needs test confirmation on ZFlip7.**
+- `transfer-export` wireless path: untested. Blocked on Pi physical access
+  (micro HDMI cable ordered).
+- `org-collect` multi-source gatherer: not yet built. Blocked on confirming
+  Instagram Edits and Quick Share paths on device.
 
 ---
 
-### [v3.0] 2026-06 -- batch-backup -- Merge logic + full documentation
+## Author
 
-**Status:** `partial` -- merge/append tested on ZFlip7, dialog pending
+**Samuel Dixon** -- Product Test Engineer -- Austin TX  
+[linktr.ee/sdixoninvesting](https://linktr.ee/sdixoninvesting)
 
-**New features:**
-- `zip_with_merge()`: when a folder already has a zip in Export/, prompts:
-  - `m` Merge -- extract + combine + re-zip into single archive
-  - `a` Append -- new timestamped zip alongside existing (default)
-  - `s` Skip -- leave existing untouched
-- Full inline documentation: every function has purpose, design rationale,
-  Python/C++ analogues, and Android-specific gotchas explained
-- Debug output: `find` count printed before dialog so you can see if
-  storage is mounted even if dialog fails
-- `source ~/.bashrc || true` -- prevents `set -e` from killing script
-  when fastfetch/neofetch returns non-zero during sourcing
-
-**Bug fixes:**
-- `set -e` + `source ~/.bashrc` silent exit resolved via `|| true`
-- `find -not -path '*/.*'` removed -- broken on Samsung Android 16
-  kernel 6.6.x. Replaced with bash `[[ "$f" == .* ]]` check
-- `((PASS++)) || true` -- prevents arithmetic false positive under `set -e`
-- Interactive mode now scans ALL of `shared/` not just segment-matched folders
-
-**Known issues:**
-- termux-dialog checkbox still not finding folders on ZFlip7 interactive mode
-- Pending: full 3-device test (S23+, Pixel 9a, ZFlip7)
-
----
-
-### [v2.0] 2026-05 -- batch-backup -- All-folders dialog + Samsung compat
-
-**Status:** `partial` -- hot mode working, interactive mode dialog broken
-
-**New features:**
-- Interactive mode scans all of `shared/` directly
-- Samsung OneUI `code:-2` cancel detection
-- Index field + text field fallback for dialog parsing
-- HOME/PATH guard for Termux Widget launch context
-- Preflight check with clear `pkg install` hint
-
----
-
-### [v2.0] 2026-05 -- segment_manager.py -- Combined clipboard output
-
-**Status:** `tested` -- working on ZFlip7
-
-**New features:**
-- Combined clipboard block: `pistol50` on line 1, hashtags on line 2
-- `--quick` flag: bypass menu, 2 inputs, clipboard ready in <10s
-- Platform modes: YouTube (15 tags), Instagram (30), TikTok (10)
-- TikTok: Spanish word prompt for bilingual thumbnail label
-- `quick-copy` widget shortcut wraps `--quick` mode
-
----
-
-### [v2.0] 2026-05 -- org-camera-album -- Smart auto-router
-
-**Status:** `tested` -- working on ZFlip7
-
-**New features:**
-- Radio dialog pre-populated with hot segments (counter >= 50) at top
-- One tap for daily recurring segments (pistol, skip, climb)
-- "-- type new name --" fallback for new/one-off folders
-- File type filtering: only moves media files (mp4, jpg, mov, etc.)
-
----
-
-### [v1.0] 2026-04 -- content-pipeline -- Initial 5-step pipeline
-
-**Status:** `tested` -- hot mode working across ZFlip7
-
-- org-camera-album -> batch-backup -> backup-all -> manager -> transfer-export
-- Step 2 mode selector: y=hot / c=custom / n=single
-- Exit code propagation: any step failure halts pipeline with clear message
-
----
-
-## Prototyping Diagrams
-
-### batch-backup v3: zip decision flow
-
-```mermaid
-flowchart TD
-    START([folder in TARGETS]) --> HAS{has_zip?}
-
-    HAS -->|no| DIRECT[z_backup direct
-new timestamped zip]
-    DIRECT --> DONE([ok])
-
-    HAS -->|yes| PROMPT[show existing zip name
-prompt: m / a / s]
-
-    PROMPT -->|m merge| EXT[extract existing zip
-to scratch dir]
-    EXT --> COPY[cp -n new files
-no-clobber: additive only]
-    COPY --> REZIP[zip -9 -r merged_timestamp.zip]
-    REZIP --> DEL[rm old zip
-rm scratch dir]
-    DEL --> DONE2([ok merged])
-
-    PROMPT -->|a append| APPEND[z_backup
-new timestamped zip
-existing preserved]
-    APPEND --> DONE3([ok appended])
-
-    PROMPT -->|s skip| SKIP([ok skipped])
-```
-
-### batch-backup v3: dialog debug flow
-
-```mermaid
-flowchart TD
-    LAUNCH([script starts]) --> SRC[source ~/.bashrc OR true
-prevents set -e exit]
-    SRC --> PRE[preflight
-check binaries + shared/ mount]
-    PRE -->|shared/ missing| SETUP([termux-setup-storage])
-    PRE -->|ok| SCAN[find shared/ -maxdepth 1 -type d
-NO -not -path flag]
-    SCAN --> COUNT{count > 0?}
-    COUNT -->|no| DEBUG[print debug hint
-find + termux-setup-storage]
-    COUNT -->|yes| DLG[termux-dialog checkbox]
-    DLG -->|code -2| CANCEL([exit 0 cancelled])
-    DLG -->|code -1| PARSE{index field
-present?}
-    PARSE -->|yes| IDX[parse index array
-strip whitespace
-validate bounds]
-    PARSE -->|no| TEXT[Samsung fallback
-parse text field
-trim + match labels]
-    IDX --> TARGETS([build TARGETS])
-    TEXT --> TARGETS
-```
-
-### Proposed future improvements
-
-```mermaid
-flowchart LR
-    subgraph now [v3 Current]
-        A[manual merge prompt
-per folder]
-        B[single device
-Export/]
-        C[timestamp zip naming]
-    end
-
-    subgraph v4 [v4 Proposed]
-        D[--merge-all flag
-auto-merge without prompt]
-        E[cross-device parity
-compare Export/ via SSH]
-        F[zip naming by
-segment + date range]
-        G[segment_manager
-parity warning on launch]
-        H[thumbnail writer
-burn pistol180 onto
-first 3s of video]
-    end
-
-    A --> D
-    B --> E
-    C --> F
-    C --> G
-    A --> H
-```
+*Outdoors -- Tech -- Fitness -- Education*
