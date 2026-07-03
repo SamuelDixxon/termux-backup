@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 197,
+      "counter": 220,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -43,7 +43,7 @@
       "name": "m",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 123,
+      "counter": 125,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -57,7 +57,7 @@
       "name": "skate",
       "short_desc": "longboarding",
       "full_desc": "longboarding",
-      "counter": 17,
+      "counter": 18,
       "hashtags": [
         "#longboarding",
         "#skateboarding",
@@ -85,7 +85,7 @@
       "name": "book review",
       "short_desc": "book reviews",
       "full_desc": "book reviews and education",
-      "counter": 22,
+      "counter": 23,
       "hashtags": [
         "#bookreview",
         "#books",
@@ -253,7 +253,7 @@
       "name": "box",
       "short_desc": "all things related to boxing",
       "full_desc": "boxing and things related to fighting",
-      "counter": 44,
+      "counter": 45,
       "hashtags": [
         "#box",
         "#punch",
