@@ -1,6 +1,6 @@
 {
-  "segment": "climb",
-  "counter": 220,
+  "segment": "integral",
+  "counter": 25,
   "mode": "incremental",
-  "timestamp": "2026-07-03T15:37:06"
+  "timestamp": "2026-07-12T18:23:40"
 }

@@ -891,10 +891,10 @@ burn_thumb() {
     "$FFMPEG" -i "$input" \
         -vf "drawtext=text='$label':
              fontfile='$font_path':
-             fontsize=72:
+             fontsize=100:
              fontcolor=white:
              x=(w-text_w)/2:
-             y=h-text_h-40:
+             y=h-text_h:
              shadowcolor=black:
              shadowx=3:
              shadowy=3:

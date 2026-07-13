@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 220,
+      "counter": 222,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -239,7 +239,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 550,
+      "counter": 565,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -347,7 +347,7 @@
       "name": "game",
       "short_desc": "games in general but exploring yt live games",
       "full_desc": "all sorts of fun in game space crossy road, pool, minecraft, and more",
-      "counter": 45,
+      "counter": 46,
       "hashtags": [
         "#videogame",
         "#play",
@@ -359,7 +359,7 @@
       "name": "integral",
       "short_desc": "practice solving integrals at integral.com",
       "full_desc": "integral practice post college and learning techniques",
-      "counter": 20,
+      "counter": 25,
       "hashtags": [
         "#integral",
         "#math",
