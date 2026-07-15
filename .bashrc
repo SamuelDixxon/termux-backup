@@ -14,6 +14,23 @@
 fastfetch
 
 # =============================================================================
+# EXTERNAL SCRIPT SOURCING
+# =============================================================================
+# burn_thumb.sh is the canonical, standalone implementation of the thumbnail
+# burner (_burn_thumb_core, burn_thumb, burn_thumb_segment + their aliases).
+# Sourced here instead of duplicated -- duplicating it in .bashrc meant every
+# bugfix had to be applied twice and drifted out of sync. mkshot_burn below
+# depends on _burn_thumb_core from this file.
+# =============================================================================
+BURN_THUMB_SCRIPT="$HOME/.shortcuts/burn_thumb.sh"
+if [ -f "$BURN_THUMB_SCRIPT" ]; then
+    source "$BURN_THUMB_SCRIPT"
+else
+    echo "! burn_thumb.sh not found at $BURN_THUMB_SCRIPT -- burnthumb/mkshot-burn unavailable"
+fi
+
+
+# =============================================================================
 # CORE: z_backup / z_restore
 # =============================================================================
 
@@ -314,6 +331,160 @@ mkshot() {
     fi
 }
 alias mks='mkshot'
+
+# =============================================================================
+# FUNCTION: mkshot_burn
+# Same as mkshot, but for an EXISTING segment: moves DCIM/Camera into the
+# segment folder, then burns a sequential thumbnail label onto each moved
+# clip using the segment's LIVE counter from segments_data.json, and writes
+# the updated counter back in place. Same confirm-prompt / media-scan style
+# as mkshot -- this is that function plus the burn step, not a rewrite.
+#
+# Burns ALL videos in the batch by default. Pass --first-only if you only
+# want a single cover thumbnail labeled and the rest left untouched.
+#
+# FIXED: previously a single failed burn (e.g. one bad file) would `break`
+# out of the whole loop and silently skip every file after it -- that's
+# almost certainly why only one video was getting labeled. Failures are now
+# per-file: skipped and reported, batch keeps going. Also now captures the
+# exact list of files being moved up front instead of re-querying the
+# destination folder right after `mv` -- on Android's FUSE-mounted shared
+# storage that re-query can lag and return an incomplete listing. Hidden
+# dotfiles (Android trash/pending items) and already-`_labeled` files are
+# excluded from the source capture and burn step, respectively.
+#
+# Requires _burn_thumb_core, sourced from burn_thumb.sh at the top of this
+# file (see EXTERNAL SCRIPT SOURCING section).
+#
+# Usage: mkshot-burn pistol
+#        mkshot-burn pistol --dur 4
+#        mkshot-burn pistol --first-only     # label just the first clip
+# =============================================================================
+mkshot_burn() {
+    local name="$1"
+    shift
+    local dur=3
+    local first_only=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --dur)        dur="$2"; shift 2 ;;
+            --first-only) first_only=true; shift ;;
+            *)            shift ;;
+        esac
+    done
+
+    local shared="$HOME/storage/shared"
+    local dcim="$shared/DCIM/Camera"
+    local dest="$shared/$name"
+    local DATA="$HOME/.shortcuts/.hidden/segments_data.json"
+
+    [ -z "$name" ] && echo "Usage: mkshot-burn <segment-name> [--dur N] [--first-only]" && return 1
+    [ ! -f "$DATA" ] && echo "x segments_data.json not found: $DATA" && return 1
+
+    local counter
+    counter=$(python3 -c "
+import json
+d = json.load(open('$DATA'))
+match = [s for s in d['segments'] if s['name'] == '$name']
+print(match[0]['counter'] if match else -1)
+")
+    if [ "$counter" = "-1" ]; then
+        echo "x Segment '$name' not found in segments_data.json -- add it with seg-add first"
+        return 1
+    fi
+
+    mkdir -p "$dest"
+    echo "Created: $dest"
+
+    # Capture the exact file list from DCIM/Camera BEFORE moving anything.
+    # Excludes hidden dotfiles -- Android marks trashed/pending MediaStore
+    # items that way, and they're usually corrupt or incomplete (ffmpeg will
+    # fail on them with "moov atom not found").
+    local src_files=()
+    while IFS= read -r -d '' f; do
+        src_files+=("$f")
+    done < <(find "$dcim" -maxdepth 1 -type f ! -name '.*' -print0 | sort -z)
+
+    local count="${#src_files[@]}"
+    if [ "$count" -eq 0 ]; then
+        echo "DCIM/Camera is empty -- nothing to move or burn."
+        return 0
+    fi
+
+    read -rp "Move $count file(s) from DCIM/Camera into $name/ and burn labels? (y/n): " yn
+    if [ "${yn,,}" != "y" ]; then
+        echo "Cancelled."
+        return 0
+    fi
+
+    local label_prefix
+    label_prefix="$(echo "${name:0:1}" | tr '[:lower:]' '[:upper:]')${name:1}"
+
+    local moved=0 processed=0 skipped=0
+    for f in "${src_files[@]}"; do
+        local fname moved_path
+        fname=$(basename "$f")
+        moved_path="${dest}/${fname}"
+
+        mv "$f" "$moved_path" 2>/dev/null
+        if [ ! -f "$moved_path" ]; then
+            echo "x failed to move $fname -- skipping"
+            skipped=$((skipped + 1))
+            continue
+        fi
+        moved=$((moved + 1))
+
+        # Already labeled once (e.g. re-saved from a prior run) -- move it,
+        # don't re-burn it into a _labeled_labeled cascade.
+        case "$fname" in
+            *_labeled.*)
+                continue
+                ;;
+        esac
+
+        case "$fname" in
+            *.mp4|*.MP4|*.mov|*.MOV)
+                if $first_only && [ "$processed" -ge 1 ]; then
+                    continue
+                fi
+
+                counter=$((counter + 1))
+                local label="${label_prefix} ${counter}"
+                local base ext output
+                base=$(basename "$moved_path" | sed 's/\.[^.]*$//')
+                ext="${moved_path##*.}"
+                output="${dest}/${base}_labeled.${ext}"
+
+                echo "  [$label] $fname"
+                if _burn_thumb_core "$moved_path" "$output" "$label" "$dur"; then
+                    termux-media-scan "$output" 2>/dev/null
+                    processed=$((processed + 1))
+                else
+                    echo "  x burn failed on $fname -- skipping this one, counter rolled back, continuing"
+                    counter=$((counter - 1))
+                fi
+                ;;
+        esac
+    done
+
+    termux-media-scan -r "$dcim" 2>/dev/null
+    termux-media-scan -r "$dest" 2>/dev/null
+
+    python3 -c "
+import json
+data = json.load(open('$DATA'))
+for s in data['segments']:
+    if s['name'] == '$name':
+        s['counter'] = $counter
+        break
+json.dump(data, open('$DATA','w'), indent=2)
+"
+
+    echo "OK Moved $moved/$count file(s) -> $dest/  |  labeled $processed video(s)  |  $name counter now at $counter"
+    [ "$skipped" -gt 0 ] && echo "! $skipped file(s) failed to move -- check permissions/storage"
+    $first_only && echo "(--first-only: rest of the clips were moved but left unlabeled)"
+}
+alias mksb='mkshot_burn'
 
 # =============================================================================
 # FUNCTION: pkg_check
@@ -702,12 +873,13 @@ tapestry() {
     local out_dir="$shared/Export"
     local FFMPEG="/data/data/com.termux/files/usr/bin/ffmpeg"
 
-    for arg in "$@"; do
-        case "$arg" in
-            --grid)    mode="grid" ;;
-            --concat)  mode="concat" ;;
-            --max)     shift; max_clips="$1" ;;
-            --cols)    shift; cols="$1" ;;
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --grid)    mode="grid"; shift ;;
+            --concat)  mode="concat"; shift ;;
+            --max)     max_clips="$2"; shift 2 ;;
+            --cols)    cols="$2"; shift 2 ;;
+            *)         shift ;;
         esac
     done
 
@@ -822,100 +994,13 @@ tapestry() {
     fi
 }
 
+
 # =============================================================================
-# FFMPEG: THUMBNAIL BURNER
+# FFMPEG: THUMBNAIL BURNER -- see burn_thumb.sh
 # =============================================================================
-# Burn a text label onto the first N seconds of a video.
-# Reads segment name + counter from session.json if available,
-# otherwise prompts.
-#
-# Label format: "Pistol 181" (capitalised name + counter)
-# Font: uses Android system font (Roboto) or fallback
-#
-# EDUCATIONAL CONCEPT:
-#   drawtext filter = real-time video compositing.
-#   Same technique used in broadcast lower-thirds and OSD overlays.
-#   In ATE: analogous to burning a test ID onto a captured waveform image.
-#
-# Usage:
-#   burn-thumb ~/storage/shared/pistol/clip.mp4
-#   burn-thumb ~/storage/shared/pistol/clip.mp4 --label "Pistol 181"
-#   burn-thumb ~/storage/shared/pistol/clip.mp4 --dur 5
-# =============================================================================
-burn_thumb() {
-    local input="$1"
-    shift
-    local label=""
-    local dur=3
-    local FFMPEG="/data/data/com.termux/files/usr/bin/ffmpeg"
-
-    for arg in "$@"; do
-        case "$arg" in
-            --label) shift; label="$1" ;;
-            --dur)   shift; dur="$1" ;;
-        esac
-    done
-
-    [ -z "$input" ] && echo "Usage: burn-thumb <video.mp4> [--label \"Text\"] [--dur N]" && return 1
-    [ ! -f "$input" ] && echo "x File not found: $input" && return 1
-    [ ! -x "$FFMPEG" ] && echo "x ffmpeg not found -- pkg install ffmpeg" && return 1
-
-    # Auto-read label from session.json if not provided
-    if [ -z "$label" ]; then
-        local SESSION="$HOME/.shortcuts/.hidden/session.json"
-        if [ -f "$SESSION" ]; then
-            local seg count
-            seg=$(python3 -c "import json; d=json.load(open('$SESSION')); print(d.get('segment',''))")
-            count=$(python3 -c "import json; d=json.load(open('$SESSION')); print(d.get('counter',''))")
-            [ -n "$seg" ] && label="$(echo "${seg:0:1}" | tr '[:lower:]' '[:upper:]')${seg:1} $count"
-        fi
-    fi
-
-    [ -z "$label" ] && read -rp "Label text (e.g. Pistol 181): " label
-    [ -z "$label" ] && echo "x No label provided" && return 1
-
-    local dir base ext
-    dir=$(dirname "$input")
-    base=$(basename "$input" | sed 's/\.[^.]*$//')
-    ext="${input##*.}"
-    local output="${dir}/${base}_labeled.${ext}"
-
-    # Font path: try system Roboto first, fall back to any available font
-    local font_path="/system/fonts/Roboto-Bold.ttf"
-    [ ! -f "$font_path" ] && font_path="/system/fonts/DroidSans-Bold.ttf"
-    [ ! -f "$font_path" ] && font_path="/data/data/com.termux/files/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-
-    echo "Burning label: '$label' onto first ${dur}s of video"
-    echo "Output: $output"
-
-    "$FFMPEG" -i "$input" \
-        -vf "drawtext=text='$label':
-             fontfile='$font_path':
-             fontsize=100:
-             fontcolor=white:
-             x=(w-text_w)/2:
-             y=h-text_h:
-             shadowcolor=black:
-             shadowx=3:
-             shadowy=3:
-             enable='between(t,0,$dur)'" \
-        -c:v libx264 -preset fast -crf 22 \
-        -c:a copy \
-        -movflags +faststart \
-        "$output" -y 2>/dev/null
-
-    if [ -f "$output" ]; then
-        local size
-        size=$(du -sh "$output" | cut -f1)
-        echo "OK $output ($size)"
-        termux-media-scan "$output" 2>/dev/null
-    else
-        echo "x burn-thumb failed"
-        return 1
-    fi
-}
-alias burnthumb='burn_thumb'
-
+# _burn_thumb_core, burn_thumb, burn_thumb_segment (and their aliases
+# burnthumb / burnthumbsegment) are sourced from burn_thumb.sh at the top
+# of this file. Kept as one file so fixes don't have to be applied twice.
 # =============================================================================
 # FFMPEG: AUDIO TOOLS (signal processing / ATE crossover)
 # =============================================================================
@@ -990,7 +1075,9 @@ alias waveform='waveform_img'
 # =============================================================================
 alias export='cd /data/data/com.termux/files/home/storage/shared/Export'
 alias e='cd /data/data/com.termux/files/home/storage/shared/Export'
+alias s='cd ~/.shortcuts && ls -ltr'
 alias cpfile='termux-clipboard-set <'
+
 
 # =============================================================================
 # END
