@@ -1,23 +1,20 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # =============================================================================
-# tapestry
+# tapestry -- grid mode only
 # =============================================================================
 # PURPOSE:
-#   Compile multiple video clips from a segment folder into one output.
-#   Two modes:
+#   Side-by-side NxN grid of clips from a segment folder, all playing
+#   simultaneously. Use for: showing volume and repetition at a glance,
+#   progress grids, content thumbnails, "100 pistol squats in 30 seconds"
+#   style posts.
 #
-#   --concat (default)
-#     Sequential playlist: clip1 -> clip2 -> clip3
-#     Use for: session reels, highlight compilations, upload consolidation.
-#     Result: one video showing your full session in chronological order.
-#
-#   --grid
-#     Side-by-side NxN grid: all clips playing simultaneously.
-#     Use for: showing volume and repetition at a glance, progress grids,
-#     content thumbnails, "100 pistol squats in 30 seconds" style posts.
+#   For sequential concatenation into one long reel instead, use `sandwich`.
+#   These used to be one dual-mode script; split apart because concat was
+#   the default mode, so running `tapestry segment` silently gave a
+#   concatenated reel instead of the grid the name implies. Two single-
+#   purpose tools instead of one mode flag you have to remember.
 #
 # EDUCATIONAL CONCEPTS:
-#   concat demuxer  = ffmpeg playlist format, same as broadcast automation
 #   xstack filter   = video matrix switcher, like ATE multi-site monitoring
 #   CRF encoding    = constant rate factor, perceptual quality vs file size
 #   faststart flag  = moves MP4 metadata to front for progressive streaming
@@ -26,135 +23,108 @@
 # USAGE:
 #   tapestry <segment> [options]
 #
-#   tapestry pistol                     concat all clips in shared/pistol/
-#   tapestry pistol --grid              2x2 grid of first 4 clips
-#   tapestry skip --concat --max 10     concat first 10 clips only
-#   tapestry mcp96 --grid --cols 3      3-column grid
-#   tapestry climb --grid --cols 2 --max 6  2x3 grid of 6 clips
+#   tapestry pistol                     2x2 grid of first 4 clips (2 cols default)
+#   tapestry mcp96 --cols 3             3-column grid
+#   tapestry climb --cols 2 --max 6     2x3 grid of 6 clips
+#   tapestry pistol --timeout 900       raise the hang-safety timeout to 15m
+#   tapestry pistol --cols 3 --square   3-col grid forced to 1080x1080 output
+#   tapestry pistol --width 1920 --height 1080   custom landscape canvas
 #
 # OUTPUT:
-#   ~/storage/shared/Export/<segment>_tapestry_<mode>_<timestamp>.mp4
+#   ~/storage/shared/Export/<segment>_tapestry_grid_<timestamp>.mp4
 #
 # INSTALL:
-#   cp tapestry ~/.shortcuts/tapestry
+#   cp tapestry video-utils.sh ~/.shortcuts/
 #   chmod +x ~/.shortcuts/tapestry
+#   (video-utils.sh must sit next to this script -- it's sourced, not run)
 #
 # DEPENDENCIES:
-#   pkg install ffmpeg
-#
-# PIPELINE INTEGRATION:
-#   Run after batch-backup zips a session folder.
-#   The tapestry output is a single uploadable file covering the whole session.
-#   For high-volume segments (pistol 180+), concat mode lets you upload
-#   one 2-minute reel instead of 15 individual 8-second clips.
+#   pkg install ffmpeg coreutils
 # =============================================================================
 
-# -- Environment guard --------------------------------------------------------
-if [ -z "$HOME" ]; then
-    export HOME="/data/data/com.termux/files/home"
+SCRIPT_DIR="$(dirname "$0")"
+# shellcheck source=video-utils.sh
+if ! source "$SCRIPT_DIR/video-utils.sh" 2>/dev/null; then
+    echo "x video-utils.sh not found next to this script ($SCRIPT_DIR) -- copy it in from the repo"
+    exit 1
 fi
-export PATH="/data/data/com.termux/files/usr/bin:$PATH"
 
-# -- Config -------------------------------------------------------------------
-SHARED="$HOME/storage/shared"
-EXPORT="$SHARED/Export"
-FFMPEG="/data/data/com.termux/files/usr/bin/ffmpeg"
-FFPROBE="/data/data/com.termux/files/usr/bin/ffprobe"
-CACHE="/data/data/com.termux/files/home/.cache/tapestry"
-
-# -- ANSI palette (ASCII-safe) ------------------------------------------------
-BOLD="\033[1m"; RESET="\033[0m"; GREEN="\033[32m"; YELLOW="\033[33m"
-RED="\033[31m"; CYAN="\033[36m"; GRAY="\033[90m"
-
-# -- Helpers ------------------------------------------------------------------
-ok()   { echo -e "  ${GREEN}v${RESET}  $*"; }
-fail() { echo -e "  ${RED}x${RESET}  $*"; }
-warn() { echo -e "  ${YELLOW}!${RESET}  $*"; }
-info() { echo -e "  ${GRAY}$*${RESET}"; }
+# --help can appear anywhere, including first -- catch it before SEGMENT
+# ever gets assigned, or it gets treated as a segment name instead.
+for __a in "$@"; do
+    case "$__a" in
+        --help|-h)
+            echo ""
+            echo "Usage: tapestry <segment> [--cols N] [--max N] [--crf N] [--slow] [--timeout N]"
+            echo ""
+            echo "  --cols N       Grid columns (default: 2)"
+            echo "  --max N        Limit to first N clips (default: 20)"
+            echo "  --crf N        Quality 18-28, lower=better (default: 23)"
+            echo "  --slow         Slower encode, smaller file"
+            echo "  --timeout N    Hang-safety timeout in seconds (default: 600)"
+            echo "  --width N      Target output width (default: 1080)"
+            echo "  --height N     Target output height (default: 1920, vertical)"
+            echo "  --vertical     Shortcut for 1080x1920 (default)"
+            echo "  --square       Shortcut for 1080x1080"
+            echo "  --landscape    Shortcut for 1920x1080"
+            echo ""
+            echo "For sequential concatenation into one reel instead: sandwich"
+            echo ""
+            echo "Examples:"
+            echo "  tapestry pistol"
+            echo "  tapestry pistol --cols 2 --max 4"
+            echo "  tapestry climb --cols 3"
+            exit 0
+            ;;
+    esac
+done
 
 # =============================================================================
 # ARGUMENT PARSING
 # =============================================================================
 SEGMENT="$1"
-MODE="concat"
 MAX_CLIPS=20
 COLS=2
+TARGET_W=1080    # target canvas width -- default matches vertical short-form
+TARGET_H=1920    # target canvas height -- 9:16, Reels/Shorts/TikTok standard
 CRF=23           # quality: lower = better, larger file. 23 = balanced.
 PRESET="fast"    # encoding speed: ultrafast/fast/medium/slow
+TIMEOUT_SECS=600 # hang-safety: kill ffmpeg if it runs longer than this
 
 shift
-# Parse remaining arguments without shift-inside-case (causes recursion on Android bash)
 ARGS=("$@")
 i=0
 while [ $i -lt ${#ARGS[@]} ]; do
     arg="${ARGS[$i]}"
     case "$arg" in
-        --grid)        MODE="grid" ;;
-        --concat)      MODE="concat" ;;
         --slow)        PRESET="slow" ;;
         --max)         i=$(( i + 1 )); MAX_CLIPS="${ARGS[$i]}" ;;
         --cols)        i=$(( i + 1 )); COLS="${ARGS[$i]}" ;;
         --crf)         i=$(( i + 1 )); CRF="${ARGS[$i]}" ;;
-        --help|-h)
-            echo ""
-            echo "Usage: tapestry <segment> [--grid|--concat] [--max N] [--cols N]"
-            echo ""
-            echo "  --concat       Sequential reel (default)"
-            echo "  --grid         Side-by-side grid"
-            echo "  --max N        Limit to first N clips (default: 20)"
-            echo "  --cols N       Grid columns (default: 2)"
-            echo "  --crf N        Quality 18-28, lower=better (default: 23)"
-            echo "  --slow         Slower encode, smaller file"
-            echo ""
-            echo "Examples:"
-            echo "  tapestry pistol"
-            echo "  tapestry pistol --grid --cols 2 --max 4"
-            echo "  tapestry skip --concat --max 10"
-            echo "  tapestry climb --grid --cols 3"
-            exit 0
-            ;;
+        --timeout)     i=$(( i + 1 )); TIMEOUT_SECS="${ARGS[$i]}" ;;
+        --width)       i=$(( i + 1 )); TARGET_W="${ARGS[$i]}" ;;
+        --height)      i=$(( i + 1 )); TARGET_H="${ARGS[$i]}" ;;
+        --vertical)    TARGET_W=1080; TARGET_H=1920 ;;
+        --square)      TARGET_W=1080; TARGET_H=1080 ;;
+        --landscape)   TARGET_W=1920; TARGET_H=1080 ;;
     esac
     i=$(( i + 1 ))
 done
 
+validate_uint MAX_CLIPS 20 "--max"
+validate_uint COLS 2 "--cols"
+[ "$COLS" -eq 0 ] 2>/dev/null && { warn "Invalid --cols value, using default (2)"; COLS=2; }
+validate_uint TIMEOUT_SECS 600 "--timeout"
+validate_uint TARGET_W 1080 "--width"
+validate_uint TARGET_H 1920 "--height"
+
 # =============================================================================
 # VALIDATION
 # =============================================================================
-if [ -z "$SEGMENT" ]; then
-    echo -e "\n${RED}Usage: tapestry <segment> [--grid|--concat] [--max N]${RESET}"
-    echo -e "${GRAY}Run: tapestry --help${RESET}\n"
-    exit 1
-fi
-
-if [ ! -x "$FFMPEG" ]; then
-    fail "ffmpeg not found"
-    echo -e "${YELLOW}  Fix: pkg install ffmpeg${RESET}"
-    exit 1
-fi
-
-SRC="$SHARED/$SEGMENT"
-if [ ! -d "$SRC" ]; then
-    fail "Folder not found: $SRC"
-    exit 1
-fi
-
-# =============================================================================
-# COLLECT CLIPS
-# =============================================================================
-# Sort by modification time (oldest first = chronological session order).
-# This matters for concat mode -- clips appear in the order you filmed them.
-# Skip hidden/dotfiles (Android gallery trash starts with '.')
-# Skip files with no readable moov atom by checking they are > 10KB
-mapfile -t CLIPS < <(
-    find "$SRC" -maxdepth 2 \( -name "*.mp4" -o -name "*.mov" -o -name "*.3gp" \) \
-    -type f -not -name ".*" 2>/dev/null | sort | head -"$MAX_CLIPS"
-)
-
-if [ "${#CLIPS[@]}" -eq 0 ]; then
-    fail "No video files found in $SRC"
-    info "Supported formats: .mp4 .mov .3gp"
-    exit 1
-fi
+require_segment_folder "$SEGMENT" "Usage: tapestry <segment> [--cols N] [--max N]\nRun: tapestry --help"
+require_ffmpeg
+detect_timeout
+collect_clips "$MAX_CLIPS"
 
 # =============================================================================
 # HEADER
@@ -162,150 +132,100 @@ fi
 clear
 echo -e "${BOLD}"
 echo "  +==========================================+"
-echo "  |        TAPESTRY                          |"
+echo "  |        TAPESTRY (grid)                   |"
 echo "  +==========================================+"
 echo -e "${RESET}"
 echo -e "${GRAY}  Segment: $SEGMENT${RESET}"
-echo -e "${GRAY}  Mode:    $MODE${RESET}"
 echo -e "${GRAY}  Clips:   ${#CLIPS[@]}${RESET}"
 echo ""
-
-# Show clip list
-for clip in "${CLIPS[@]}"; do
-    # Get duration via ffprobe if available
-    dur=""
-    if [ -x "$FFPROBE" ]; then
-        dur=$("$FFPROBE" -v quiet -show_entries format=duration \
-              -of default=noprint_wrappers=1:nokey=1 "$clip" 2>/dev/null | \
-              awk '{printf "%.1fs", $1}')
-    fi
-    info "$(basename "$clip") $dur"
-done
+print_clip_list
 echo ""
 
 mkdir -p "$EXPORT" "$CACHE"
 TIMESTAMP=$(date +%Y%m%d-%H%M)
-OUT_FILE="$EXPORT/${SEGMENT}_tapestry_${MODE}_${TIMESTAMP}.mp4"
+OUT_FILE="$EXPORT/${SEGMENT}_tapestry_grid_${TIMESTAMP}.mp4"
 
 # =============================================================================
-# MODE: CONCAT
+# BUILD GRID
 # =============================================================================
-if [ "$MODE" = "concat" ]; then
+N="${#CLIPS[@]}"
+ROWS=$(( (N + COLS - 1) / COLS ))
+# Cell size is derived from the TARGET canvas (default 1080x1920, standard
+# vertical short-form), not hardcoded -- previously fixed at 480x270
+# regardless of --cols, so the output resolution had no relationship to
+# how you'd actually view it and never filled a phone screen.
+CELL_W=$(( TARGET_W / COLS ))
+CELL_H=$(( TARGET_H / ROWS ))
+TOTAL_W=$(( COLS * CELL_W ))
+TOTAL_H=$(( ROWS * CELL_H ))
 
-    LIST_FILE="$CACHE/${SEGMENT}_concat_list.txt"
-    rm -f "$LIST_FILE"
+info "Grid: ${COLS}x${ROWS}  cells: ${CELL_W}x${CELL_H}  canvas: ${TOTAL_W}x${TOTAL_H} -> output: ${TARGET_W}x${TARGET_H}"
+echo ""
 
-    # Validate each clip before adding to list
-    VALID=0
-    for clip in "${CLIPS[@]}"; do
-        if "$FFPROBE" -v quiet -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1 "$clip" 2>/dev/null | grep -q codec; then
-            echo "file '$clip'" >> "$LIST_FILE"
-            VALID=$(( VALID + 1 ))
-        else
-            warn "Skipping unreadable clip: $(basename "$clip")"
-        fi
+FILTER=""
+for i in "${!CLIPS[@]}"; do
+    FILTER+="[$i:v]scale=${CELL_W}:${CELL_H}:"
+    FILTER+="force_original_aspect_ratio=decrease,"
+    FILTER+="pad=${CELL_W}:${CELL_H}:(ow-iw)/2:(oh-ih)/2[v${i}];"
+done
+
+LAYOUT=""
+for (( row=0; row<ROWS; row++ )); do
+    for (( col=0; col<COLS; col++ )); do
+        idx=$(( row * COLS + col ))
+        [ "$idx" -ge "$N" ] && break
+        x=$(( col * CELL_W ))
+        y=$(( row * CELL_H ))
+        LAYOUT+="${x}_${y}|"
     done
+done
+LAYOUT="${LAYOUT%|}"
 
-    if [ "$VALID" -eq 0 ]; then
-        fail "No valid clips found after validation"
-        rm -f "$LIST_FILE"
-        EXIT_CODE=1
-    else
-        info "$VALID valid clip(s) in concat list"
-        info "Starting concat encode (CRF=$CRF preset=$PRESET)..."
-        echo ""
-	
-        "$FFMPEG" -loglevel error -nostdin -analyzeduration 50M -probesize 50M -f concat -safe 0 \
-            -i "$LIST_FILE" \
-            -c:v libx264 -pix_fmt yuv420p -preset "$PRESET" -crf "$CRF" \
-            -c:a aac -b:a 128k \
-            -movflags +faststart \
-            "$OUT_FILE" -y
+STACK_IN=""
+for i in "${!CLIPS[@]}"; do
+    STACK_IN+="[v${i}]"
+done
+FILTER+="${STACK_IN}xstack=inputs=${N}:layout=${LAYOUT}[stacked];"
+FILTER+="[stacked]scale=${TARGET_W}:${TARGET_H}[out]"
 
-        EXIT_CODE=$?
-        rm -f "$LIST_FILE"
-    fi
+INPUT_ARGS=()
+for clip in "${CLIPS[@]}"; do
+    INPUT_ARGS+=(-i "$clip")
+done
 
-# =============================================================================
-# MODE: GRID
-# =============================================================================
-else
+info "Starting grid encode (CRF=$CRF preset=$PRESET, timeout ${TIMEOUT_SECS}s)..."
+echo ""
 
-    N="${#CLIPS[@]}"
-    ROWS=$(( (N + COLS - 1) / COLS ))
+"$TIMEOUT_BIN" ${TIMEOUT_BIN:+"$TIMEOUT_SECS"} "$FFMPEG" -loglevel error -stats -nostdin "${INPUT_ARGS[@]}" \
+    -filter_complex "$FILTER" \
+    -map "[out]" \
+    -c:v libx264 -pix_fmt yuv420p -preset "$PRESET" -crf "$CRF" \
+    -movflags +faststart \
+    "$OUT_FILE" -y < /dev/null
 
-    # Cell dimensions: 16:9
-    CELL_W=480
-    CELL_H=270
-
-    TOTAL_W=$(( COLS * CELL_W ))
-    TOTAL_H=$(( ROWS * CELL_H ))
-
-    info "Grid: ${COLS}x${ROWS}  cells: ${CELL_W}x${CELL_H}  output: ${TOTAL_W}x${TOTAL_H}"
-    echo ""
-
-    # -- Build filter_complex string ------------------------------------------
-    FILTER=""
-    for i in "${!CLIPS[@]}"; do
-        FILTER+="[$i:v]scale=${CELL_W}:${CELL_H}:"
-        FILTER+="force_original_aspect_ratio=decrease,"
-        FILTER+="pad=${CELL_W}:${CELL_H}:(ow-iw)/2:(oh-ih)/2[v${i}];"
-    done
-
-    # Step 2: build xstack layout string
-    LAYOUT=""
-    for (( row=0; row<ROWS; row++ )); do
-        for (( col=0; col<COLS; col++ )); do
-            idx=$(( row * COLS + col ))
-            [ "$idx" -ge "$N" ] && break
-            x=$(( col * CELL_W ))
-            y=$(( row * CELL_H ))
-            LAYOUT+="${x}_${y}|"
-        done
-    done
-    LAYOUT="${LAYOUT%|}"
-
-    # Step 3: collect input labels for xstack
-    STACK_IN=""
-    for i in "${!CLIPS[@]}"; do
-        STACK_IN+="[v${i}]"
-    done
-
-    FILTER+="${STACK_IN}xstack=inputs=${N}:layout=${LAYOUT}[out]"
-
-    # -- Build input arguments ------------------------------------------------
-    INPUT_ARGS=()
-    for clip in "${CLIPS[@]}"; do
-        INPUT_ARGS+=(-i "$clip")
-    done
-
-    info "Starting grid encode (CRF=$CRF preset=$PRESET)..."
-    echo ""
-
-    "$FFMPEG" -loglevel error -nostdin "${INPUT_ARGS[@]}" \
-        -filter_complex "$FILTER" \
-        -map "[out]" \
-        -c:v libx264 -pix_fmt yuv420p -preset "$PRESET" -crf "$CRF" \
-        -movflags +faststart \
-        "$OUT_FILE" -y
-
-    EXIT_CODE=$?
-fi
+EXIT_CODE=$?
 
 # =============================================================================
 # RESULT
 # =============================================================================
 echo ""
-if [ $EXIT_CODE -eq 0 ] && [ -f "$OUT_FILE" ]; then
+if [ "$EXIT_CODE" -eq 124 ]; then
+    echo -e "${BOLD}${RED}"
+    echo "  +==========================================+"
+    printf "  |  x  %-38s|\n" "timed out after ${TIMEOUT_SECS}s"
+    echo "  +==========================================+"
+    echo -e "${RESET}"
+    echo -e "${GRAY}  Longer sessions may need a bigger --timeout.${RESET}"
+    exit 1
+elif [ "$EXIT_CODE" -eq 0 ] && [ -f "$OUT_FILE" ]; then
     SIZE=$(du -sh "$OUT_FILE" | cut -f1)
     echo -e "${BOLD}${GREEN}"
     echo "  +==========================================+"
-    printf "  |  v  %-38s|\n" "tapestry complete"
-    printf "  |     %-38s|\n" "$SEGMENT  $MODE  ${#CLIPS[@]} clips"
+    printf "  |  v  %-38s|\n" "tapestry (grid) complete"
+    printf "  |     %-38s|\n" "$SEGMENT  ${#CLIPS[@]} clips"
     printf "  |     %-38s|\n" "$SIZE"
     echo "  +==========================================+"
     echo -e "${RESET}"
-    # Notify gallery
     termux-media-scan "$OUT_FILE" 2>/dev/null
     echo -e "${GRAY}  Saved: $OUT_FILE${RESET}"
 else
@@ -318,4 +238,3 @@ else
     echo -e "${RESET}"
     exit 1
 fi
-

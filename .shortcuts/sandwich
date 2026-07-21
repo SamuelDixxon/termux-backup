@@ -1,0 +1,182 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# sandwich -- sequential concatenation
+# =============================================================================
+# PURPOSE:
+#   Stitch every clip in a segment folder into one sequential reel:
+#   clip1 -> clip2 -> clip3. Use for: session highlight reels, upload
+#   consolidation, and building toward longer-format content -- turning a
+#   folder of short clips into one continuous video instead of posting them
+#   one at a time.
+#
+#   Split out of `tapestry` -- that script now does grid-only (multiple
+#   clips playing simultaneously). This one does the opposite: one clip
+#   after another. Different enough use cases (quick social grid vs.
+#   long-format reel prep) to be two tools instead of one with a mode flag.
+#
+# EDUCATIONAL CONCEPTS:
+#   concat demuxer  = ffmpeg playlist format, same as broadcast automation --
+#                     it just plays each listed file in order and re-encodes
+#                     the result as one continuous stream.
+#   CRF encoding    = constant rate factor, perceptual quality vs file size
+#   faststart flag  = moves MP4 metadata to front for progressive streaming
+#
+# USAGE:
+#   sandwich <segment> [options]
+#
+#   sandwich pistol                     concat all clips in shared/pistol/
+#   sandwich skip --max 10              concat first 10 clips only
+#   sandwich pistol --timeout 900       raise the hang-safety timeout to 15m
+#
+# OUTPUT:
+#   ~/storage/shared/Export/<segment>_sandwich_<timestamp>.mp4
+#
+# INSTALL:
+#   cp sandwich video-utils.sh ~/.shortcuts/
+#   chmod +x ~/.shortcuts/sandwich
+#   (video-utils.sh must sit next to this script -- it's sourced, not run)
+#
+# DEPENDENCIES:
+#   pkg install ffmpeg coreutils
+# =============================================================================
+
+SCRIPT_DIR="$(dirname "$0")"
+# shellcheck source=video-utils.sh
+if ! source "$SCRIPT_DIR/video-utils.sh" 2>/dev/null; then
+    echo "x video-utils.sh not found next to this script ($SCRIPT_DIR) -- copy it in from the repo"
+    exit 1
+fi
+
+# --help can appear anywhere, including first -- catch it before SEGMENT
+# ever gets assigned, or it gets treated as a segment name instead.
+for __a in "$@"; do
+    case "$__a" in
+        --help|-h)
+            echo ""
+            echo "Usage: sandwich <segment> [--max N] [--crf N] [--slow] [--timeout N]"
+            echo ""
+            echo "  --max N        Limit to first N clips (default: 20)"
+            echo "  --crf N        Quality 18-28, lower=better (default: 23)"
+            echo "  --slow         Slower encode, smaller file"
+            echo "  --timeout N    Hang-safety timeout in seconds (default: 600)"
+            echo ""
+            echo "For a simultaneous NxN grid instead of sequential: tapestry"
+            echo ""
+            echo "Examples:"
+            echo "  sandwich pistol"
+            echo "  sandwich skip --max 10"
+            exit 0
+            ;;
+    esac
+done
+
+# =============================================================================
+# ARGUMENT PARSING
+# =============================================================================
+SEGMENT="$1"
+MAX_CLIPS=20
+CRF=23
+PRESET="fast"
+TIMEOUT_SECS=600
+
+shift
+ARGS=("$@")
+i=0
+while [ $i -lt ${#ARGS[@]} ]; do
+    arg="${ARGS[$i]}"
+    case "$arg" in
+        --slow)        PRESET="slow" ;;
+        --max)         i=$(( i + 1 )); MAX_CLIPS="${ARGS[$i]}" ;;
+        --crf)         i=$(( i + 1 )); CRF="${ARGS[$i]}" ;;
+        --timeout)     i=$(( i + 1 )); TIMEOUT_SECS="${ARGS[$i]}" ;;
+    esac
+    i=$(( i + 1 ))
+done
+
+validate_uint MAX_CLIPS 20 "--max"
+validate_uint TIMEOUT_SECS 600 "--timeout"
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+require_segment_folder "$SEGMENT" "Usage: sandwich <segment> [--max N]\nRun: sandwich --help"
+require_ffmpeg
+detect_timeout
+collect_clips "$MAX_CLIPS"
+
+# =============================================================================
+# HEADER
+# =============================================================================
+clear
+echo -e "${BOLD}"
+echo "  +==========================================+"
+echo "  |        SANDWICH                          |"
+echo "  +==========================================+"
+echo -e "${RESET}"
+echo -e "${GRAY}  Segment: $SEGMENT${RESET}"
+echo -e "${GRAY}  Clips:   ${#CLIPS[@]}${RESET}"
+echo ""
+print_clip_list
+echo ""
+
+mkdir -p "$EXPORT" "$CACHE"
+TIMESTAMP=$(date +%Y%m%d-%H%M)
+OUT_FILE="$EXPORT/${SEGMENT}_sandwich_${TIMESTAMP}.mp4"
+
+# =============================================================================
+# CONCAT
+# =============================================================================
+LIST_FILE="$CACHE/${SEGMENT}_concat_list.txt"
+rm -f "$LIST_FILE"
+
+for clip in "${CLIPS[@]}"; do
+    echo "file '$clip'" >> "$LIST_FILE"
+done
+
+info "${#CLIPS[@]} valid clip(s) in list"
+info "Starting concat encode (CRF=$CRF preset=$PRESET, timeout ${TIMEOUT_SECS}s)..."
+echo ""
+
+"$TIMEOUT_BIN" ${TIMEOUT_BIN:+"$TIMEOUT_SECS"} "$FFMPEG" -loglevel error -stats -nostdin -analyzeduration 50M -probesize 50M -f concat -safe 0 \
+    -i "$LIST_FILE" \
+    -c:v libx264 -pix_fmt yuv420p -preset "$PRESET" -crf "$CRF" \
+    -c:a aac -b:a 128k \
+    -movflags +faststart \
+    "$OUT_FILE" -y < /dev/null
+
+EXIT_CODE=$?
+rm -f "$LIST_FILE"
+
+# =============================================================================
+# RESULT
+# =============================================================================
+echo ""
+if [ "$EXIT_CODE" -eq 124 ]; then
+    echo -e "${BOLD}${RED}"
+    echo "  +==========================================+"
+    printf "  |  x  %-38s|\n" "timed out after ${TIMEOUT_SECS}s"
+    echo "  +==========================================+"
+    echo -e "${RESET}"
+    echo -e "${GRAY}  Longer sessions may need a bigger --timeout.${RESET}"
+    exit 1
+elif [ "$EXIT_CODE" -eq 0 ] && [ -f "$OUT_FILE" ]; then
+    SIZE=$(du -sh "$OUT_FILE" | cut -f1)
+    echo -e "${BOLD}${GREEN}"
+    echo "  +==========================================+"
+    printf "  |  v  %-38s|\n" "sandwich complete"
+    printf "  |     %-38s|\n" "$SEGMENT  ${#CLIPS[@]} clips"
+    printf "  |     %-38s|\n" "$SIZE"
+    echo "  +==========================================+"
+    echo -e "${RESET}"
+    termux-media-scan "$OUT_FILE" 2>/dev/null
+    echo -e "${GRAY}  Saved: $OUT_FILE${RESET}"
+else
+    echo -e "${BOLD}${RED}"
+    echo "  +==========================================+"
+    echo "  |  x  sandwich failed                     |"
+    echo "  |     check ffmpeg is installed            |"
+    echo "  |     pkg install ffmpeg                   |"
+    echo "  +==========================================+"
+    echo -e "${RESET}"
+    exit 1
+fi

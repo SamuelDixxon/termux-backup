@@ -83,7 +83,12 @@ z_restore() {
     [ -z "$zipfile" ] && echo "x No backup found for: $folder" && return 1
     mkdir -p "$target"
     unzip -o "$zipfile" -d "$target" >/dev/null
-    [ $? -eq 0 ] && echo "OK RESTORED $folder <- $(basename "$zipfile")" || echo "x Unzip failed"
+    if [ $? -eq 0 ]; then
+        echo "OK RESTORED $folder <- $(basename "$zipfile")"
+        termux-media-scan -r "$target" 2>/dev/null
+    else
+        echo "x Unzip failed"
+    fi
 }
 
 alias zb='z_backup'
@@ -159,6 +164,8 @@ alias mgr='python3 $HOME/.shortcuts/.hidden/segment_manager.py'
 alias quick='python3 $HOME/.shortcuts/.hidden/segment_manager.py --quick'
 alias syncup='bash $HOME/.shortcuts/backup-all'
 alias transfer='bash $HOME/.shortcuts/transfer-export'
+alias tapestry='bash $HOME/.shortcuts/tapestry'
+alias sandwich='bash $HOME/.shortcuts/sandwich'
 alias voice='bash $HOME/.shortcuts/voice-command'
 alias socmgr='python3 $HOME/.shortcuts/.hidden/social-manager.py'
 
@@ -842,158 +849,12 @@ empty_gallery_trash() {
 alias empty-gallery-trash='empty_gallery_trash'
 
 # =============================================================================
-# FFMPEG: TAPESTRY / GRID SCRIPT
 # =============================================================================
-# String multiple clips from a segment folder into a single video.
-# Two modes:
-#   --concat   Sequential: clip1 -> clip2 -> clip3 (reel style)
-#   --grid     2x2 or NxN grid: all clips playing simultaneously
-#              (great for showing volume/repetition at a glance)
-#
-# EDUCATIONAL CONCEPT:
-#   The concat mode is a direct application of the ffmpeg concat demuxer --
-#   same mechanism used in broadcast automation for playlist-based playout.
-#   The grid uses the xstack filter which maps inputs to a spatial layout,
-#   identical to multi-camera monitoring in ATE station displays.
-#
-# Usage:
-#   tapestry pistol              # concat all mp4s in shared/pistol/
-#   tapestry pistol --grid       # 2x2 grid of first 4 clips
-#   tapestry skip --concat --max 10   # concat first 10 clips
-#   tapestry mcp96 --grid --cols 3    # 3-column grid
+# TAPESTRY -- see ~/.shortcuts/tapestry
 # =============================================================================
-tapestry() {
-    local segment="$1"
-    shift
-    local mode="concat"
-    local max_clips=20
-    local cols=2
-    local shared="$HOME/storage/shared"
-    local src="$shared/$segment"
-    local out_dir="$shared/Export"
-    local FFMPEG="/data/data/com.termux/files/usr/bin/ffmpeg"
-
-    while [ $# -gt 0 ]; do
-        case "$1" in
-            --grid)    mode="grid"; shift ;;
-            --concat)  mode="concat"; shift ;;
-            --max)     max_clips="$2"; shift 2 ;;
-            --cols)    cols="$2"; shift 2 ;;
-            *)         shift ;;
-        esac
-    done
-
-    [ -z "$segment" ] && echo "Usage: tapestry <segment> [--grid|--concat] [--max N] [--cols N]" && return 1
-    [ ! -d "$src" ] && echo "x Folder not found: $src" && return 1
-    [ ! -x "$FFMPEG" ] && echo "x ffmpeg not found -- pkg install ffmpeg" && return 1
-
-    local timestamp
-    timestamp=$(date +%Y%m%d-%H%M)
-    local out_file="$out_dir/${segment}_tapestry_${mode}_${timestamp}.mp4"
-
-    # Collect mp4 files sorted by modification time (chronological order)
-    mapfile -t CLIPS < <(find "$src" -maxdepth 1 -name "*.mp4" -o -name "*.mov" \
-                         2>/dev/null | sort | head -"$max_clips")
-
-    if [ "${#CLIPS[@]}" -eq 0 ]; then
-        echo "x No mp4/mov files found in $src"
-        return 1
-    fi
-
-    echo "Tapestry: $segment  mode=$mode  clips=${#CLIPS[@]}"
-    echo "Output:   $out_file"
-    echo ""
-
-    mkdir -p "$out_dir"
-
-    if [ "$mode" = "concat" ]; then
-        # -- CONCAT MODE ----------------------------------------------------
-        # Write a temporary concat list file (ffmpeg concat demuxer format)
-        # Each line: file '/path/to/clip.mp4'
-        # This is faster than re-encoding -- uses stream copy where possible.
-        local list_file
-        list_file=$(mktemp /data/data/com.termux/files/home/.cache/tapestry_XXXXXX.txt)
-        for clip in "${CLIPS[@]}"; do
-            echo "file '$clip'" >> "$list_file"
-        done
-
-        echo "Concatenating ${#CLIPS[@]} clips..."
-        "$FFMPEG" -f concat -safe 0 -i "$list_file" \
-            -c:v libx264 -preset fast -crf 23 \
-            -c:a aac -b:a 128k \
-            -movflags +faststart \
-            "$out_file" -y 2>/dev/null
-
-        rm -f "$list_file"
-
-    else
-        # -- GRID MODE ------------------------------------------------------
-        # xstack filter: places N inputs in an NxN grid
-        # Each input is scaled to a common resolution first (scale2ref).
-        # Grid layout string: 0_0|w0_0|0_h0|w0_h0 for 2x2
-        #
-        # EDUCATIONAL NOTE:
-        #   xstack is the ffmpeg equivalent of a video matrix switcher.
-        #   In ATE, you use a similar concept for multi-site parallel testing:
-        #   each DUT feeds one "cell" of the monitoring grid.
-        #   Here each clip is a "DUT" and the grid is your performance matrix.
-
-        local n="${#CLIPS[@]}"
-        local rows=$(( (n + cols - 1) / cols ))
-        local cell_w=480
-        local cell_h=270
-
-        # Build filter complex string
-        local filter=""
-        local inputs=""
-        for i in "${!CLIPS[@]}"; do
-            inputs+="-i '${CLIPS[$i]}' "
-            filter+="[$i:v]scale=${cell_w}:${cell_h}:force_original_aspect_ratio=decrease,pad=${cell_w}:${cell_h}[v$i];"
-        done
-
-        # Build xstack layout
-        local layout=""
-        for ((row=0; row<rows; row++)); do
-            for ((col=0; col<cols; col++)); do
-                local idx=$((row * cols + col))
-                [ "$idx" -ge "$n" ] && break
-                local x="$((col * cell_w))"
-                local y="$((row * cell_h))"
-                layout+="${x}_${y}|"
-            done
-        done
-        layout="${layout%|}"  # remove trailing pipe
-
-        # Build input labels for xstack
-        local stack_inputs=""
-        for i in "${!CLIPS[@]}"; do
-            stack_inputs+="[v$i]"
-        done
-
-        local total_w=$((cols * cell_w))
-        local total_h=$((rows * cell_h))
-        filter+="${stack_inputs}xstack=inputs=${n}:layout=${layout}[out]"
-
-        echo "Building ${cols}x${rows} grid (${n} clips)..."
-        eval "$FFMPEG $inputs \
-            -filter_complex \"$filter\" \
-            -map \"[out]\" \
-            -c:v libx264 -preset fast -crf 23 \
-            -movflags +faststart \
-            \"$out_file\" -y 2>/dev/null"
-    fi
-
-    if [ -f "$out_file" ]; then
-        local size
-        size=$(du -sh "$out_file" | cut -f1)
-        echo "OK Tapestry complete: $out_file ($size)"
-        termux-media-scan "$out_file" 2>/dev/null
-    else
-        echo "x Tapestry failed -- check ffmpeg output"
-        return 1
-    fi
-}
-
+# Standalone script now, not a duplicated function -- it has real dependents
+# (ffprobe validation, timeout protection, --help) that don't belong crammed
+# into .bashrc. Aliased below in PIPELINE SHORTCUTS.
 
 # =============================================================================
 # FFMPEG: THUMBNAIL BURNER -- see burn_thumb.sh
@@ -1069,6 +930,47 @@ waveform_img() {
     [ -f "$output" ] && echo "OK $output" || echo "x Failed"
 }
 alias waveform='waveform_img'
+
+# =============================================================================
+# DYNAMIC: per-segment cd aliases
+# =============================================================================
+# Generates a plain alias named after each segment ("pistol", "climb", ...)
+# that cd's straight into ~/storage/shared/<segment>. Built from
+# segments_data.json every shell start, not hardcoded, so it stays in sync
+# as segments get added/renamed/deleted.
+#
+# Collision-safe: skips any segment name that's already a real command,
+# function, or alias -- e.g. the "code" segment would otherwise silently
+# shadow an actual `code` CLI (VS Code, etc.) if you ever install one.
+# Skipped names are reported once at shell start, not silently dropped.
+#
+# This has to run AFTER every other alias/function in this file is defined,
+# so the collision check (`type -t`) actually sees the full set.
+# =============================================================================
+_generate_segment_aliases() {
+    local DATA="$HOME/.shortcuts/.hidden/segments_data.json"
+    [ ! -f "$DATA" ] && return 0
+
+    local skipped=()
+    while IFS= read -r name; do
+        [ -z "$name" ] && continue
+        if type -t "$name" >/dev/null 2>&1; then
+            skipped+=("$name")
+            continue
+        fi
+        alias "$name"="cd \"\$HOME/storage/shared/$name\""
+    done < <(python3 -c "
+import json
+d = json.load(open('$DATA'))
+for s in d['segments']:
+    print(s['name'])
+" 2>/dev/null)
+
+    if [ "${#skipped[@]}" -gt 0 ]; then
+        echo "! segment cd-aliases skipped (name already in use): ${skipped[*]}"
+    fi
+}
+_generate_segment_aliases
 
 # =============================================================================
 # LEGACY ALIASES (kept for compatibility)

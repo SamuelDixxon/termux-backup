@@ -12,6 +12,13 @@ New in v3:
   - Counter modes: increment / set absolute / bulk-set multiple
   - --quick flag: bypass menu for widget use
   - session.json written on every selection for pipeline integration
+
+CHANGES (this pass):
+  - Removed per-platform hashtag generation (PLATFORMS / pick_platform /
+    boosters). One hashtag list per segment now, straight from
+    segments_data.json, no platform-specific max_tags trimming.
+  - Clipboard now copies hashtags only -- no more "<segment><counter>"
+    title line.
 """
 
 import json
@@ -29,16 +36,6 @@ C = {
     "red":     "\033[31m", "cyan":   "\033[36m", "gray":   "\033[90m",
     "bold":    "\033[1m",  "dim":    "\033[2m",  "blue":   "\033[34m",
     "magenta": "\033[35m",
-}
-
-PLATFORMS = {
-    "yt":  {"label": "YouTube",   "max_tags": 15,
-            "boosters": ["#youtube","#shorts","#fitness","#workout","#austintx"]},
-    "ig":  {"label": "Instagram", "max_tags": 30,
-            "boosters": ["#reels","#instafitness","#explore","#fitnessmotivation"]},
-    "tt":  {"label": "TikTok",    "max_tags": 10,
-            "boosters": ["#fyp","#foryou","#fitness","#gymtok"]},
-    "all": {"label": "All",       "max_tags": 15, "boosters": []},
 }
 
 TREND_CATEGORIES = {
@@ -116,46 +113,25 @@ def print_seg(s, idx=None):
 # CLIPBOARD
 # =============================================================================
 
-def build_clipboard_block(seg, platform_key="all"):
-    name    = seg["name"]
-    counter = seg["counter"]
-    title   = f"{name}{counter}"
-    plat    = PLATFORMS.get(platform_key, PLATFORMS["all"])
-    combined, seen = [], set()
-    for tag in seg.get("hashtags", []) + plat["boosters"]:
-        if tag not in seen and len(combined) < plat["max_tags"]:
-            combined.append(tag); seen.add(tag)
-    return f"{title}\n{' '.join(combined)}"
+def build_clipboard_block(seg):
+    """Hashtags only -- no segment/counter title line."""
+    return " ".join(seg.get("hashtags", []))
 
 
-def do_copy(seg, platform_key):
-    block = build_clipboard_block(seg, platform_key)
-    lines = block.split("\n")
-    title = lines[0]
-    tags  = lines[1] if len(lines) > 1 else ""
+def do_copy(seg):
+    block = build_clipboard_block(seg)
     print(f"\n{C['bold']}{'='*52}{C['reset']}")
     print(f"  {C['bold']}{seg['name'].upper()}{C['reset']}  "
           f"#{seg['counter']}  {badge(seg['counter'])}")
-    print(f"  {C['cyan']}Title:{C['reset']} {C['bold']}{title}{C['reset']}")
-    print(f"  {C['cyan']}Tags: {C['reset']} {C['dim']}{tags[:80]}"
-          f"{'...' if len(tags)>80 else ''}{C['reset']}")
+    print(f"  {C['cyan']}Tags:{C['reset']} {C['dim']}{block[:80]}"
+          f"{'...' if len(block) > 80 else ''}{C['reset']}")
     print(f"{C['bold']}{'='*52}{C['reset']}")
     ok = copy_to_clipboard(block)
     if ok:
-        print(f"{C['green']}Copied! Title line 1, tags line 2.{C['reset']}")
-        print(f"{C['gray']}Long-press to select each line separately.{C['reset']}")
+        print(f"{C['green']}Copied! Hashtags ready to paste.{C['reset']}")
     else:
         print(f"{C['yellow']}Clipboard unavailable.\n{block}{C['reset']}")
     return ok
-
-
-def pick_platform():
-    print(f"\n  {C['cyan']}1.{C['reset']} YouTube  "
-          f"  {C['cyan']}2.{C['reset']} Instagram"
-          f"  {C['cyan']}3.{C['reset']} TikTok   "
-          f"  {C['cyan']}4.{C['reset']} All")
-    r = input(f"{C['gray']}Platform (Enter=All): {C['reset']}").strip()
-    return {"1":"yt","2":"ig","3":"tt","4":"all","":"all"}.get(r,"all")
 
 
 # =============================================================================
@@ -179,8 +155,7 @@ def quick_copy_mode(data):
     if not raw.isdigit() or not (1 <= int(raw) <= len(hot)):
         print("Cancelled."); return
     seg = hot[int(raw) - 1]
-    pk  = pick_platform()
-    do_copy(seg, pk)
+    do_copy(seg)
     seg["counter"] += 1
     write_session(seg["name"], seg["counter"])
     save_data(data)
@@ -207,8 +182,7 @@ def search_and_copy(data):
         seg = filtered[int(input(f"\n{C['gray']}Pick: {C['reset']}")) - 1]
     except Exception:
         print(f"{C['red']}Invalid.{C['reset']}"); input("Enter..."); return
-    pk = pick_platform()
-    do_copy(seg, pk)
+    do_copy(seg)
     seg["counter"] += 1
     write_session(seg["name"], seg["counter"])
     save_data(data)
@@ -354,7 +328,7 @@ def bulk_counter_update(data):
           f"{seg['counter']} (+{diff}){C['reset']}")
 
     if input("\nCopy hashtags now? (y/n, Enter=y): ").strip().lower() != "n":
-        do_copy(seg, pick_platform())
+        do_copy(seg)
 
     write_session(seg["name"], seg["counter"])
     save_data(data)
@@ -489,8 +463,8 @@ def main():
         clear(); header(data)
         for k, (label, _) in menu.items():
             extras = {
-                "1": "title + hashtags to clipboard",
-                "2": "hot segments, 2 inputs",
+                "1": "hashtags to clipboard",
+                "2": "hot segments, 1 input",
                 "4": "name / desc / hashtags / counter",
                 "7": "mass upload -- set counter + copy",
                 "8": "distribution, velocity, law of large numbers",

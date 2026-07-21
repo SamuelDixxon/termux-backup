@@ -11,7 +11,7 @@ LIST=$(
       grep -vE "^(Export|Android|DCIM|shared)$"
 
     # Subfolders of DCIM/ (e.g. Camera, Screenshots) — bare names
-    find ~/storage/shared/DCIM -maxdepth 1 -mindepth 1 -type d -not -path '*/.*' |
+    find ~/storage/shared/ -maxdepth 1 -mindepth 1 -type d -not -path '*/.*' |
       sed 's|.*/||' |
       grep -vE "^(Export|Android)$"
   } | sort -u | tr '\n' ',' | sed 's/,$//'
