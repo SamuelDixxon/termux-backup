@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 223,
+      "counter": 235,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 86,
+      "counter": 90,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -43,7 +43,7 @@
       "name": "m",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 127,
+      "counter": 131,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -127,7 +127,7 @@
       "name": "trixie",
       "short_desc": "cat adventures",
       "full_desc": "cat",
-      "counter": 10,
+      "counter": 11,
       "hashtags": [
         "#cat",
         "#trixie",
@@ -141,7 +141,7 @@
       "name": "tech",
       "short_desc": "tech testing",
       "full_desc": "tech engineer science learn math",
-      "counter": 5,
+      "counter": 6,
       "hashtags": [
         "#tech",
         "#engineer",
@@ -183,7 +183,7 @@
       "name": "hike",
       "short_desc": "hiking adventures",
       "full_desc": "hiking videos",
-      "counter": 8,
+      "counter": 10,
       "hashtags": [
         "#hiking",
         "#outdoors",
@@ -211,7 +211,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 66,
+      "counter": 72,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -239,7 +239,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 564,
+      "counter": 566,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -347,7 +347,7 @@
       "name": "game",
       "short_desc": "games in general but exploring yt live games",
       "full_desc": "all sorts of fun in game space crossy road, pool, minecraft, and more",
-      "counter": 52,
+      "counter": 53,
       "hashtags": [
         "#videogame",
         "#play",
@@ -359,7 +359,7 @@
       "name": "integral",
       "short_desc": "practice solving integrals at integral.com",
       "full_desc": "integral practice post college and learning techniques",
-      "counter": 26,
+      "counter": 31,
       "hashtags": [
         "#integral",
         "#math",
@@ -391,6 +391,14 @@
         "#film",
         "#travel"
       ]
+    },
+    {
+      "id": 33,
+      "name": "camera",
+      "short_desc": "dummy for tapestry",
+      "full_desc": "dummy for tapestry",
+      "counter": 0,
+      "hashtags": []
     }
   ]
 }

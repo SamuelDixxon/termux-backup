@@ -67,6 +67,9 @@ for __a in "$@"; do
             echo "  --vertical     Shortcut for 1080x1920 (default)"
             echo "  --square       Shortcut for 1080x1080"
             echo "  --landscape    Shortcut for 1920x1080"
+            echo "  --letterbox    Preserve full frame with black bars instead of cropping to fill"
+            echo "  --allow-partial  Keep all clips even if the grid's last row is incomplete"
+            echo "                   (default trims clips so the grid always fills evenly)"
             echo ""
             echo "For sequential concatenation into one reel instead: sandwich"
             echo ""
@@ -87,6 +90,8 @@ MAX_CLIPS=20
 COLS=2
 TARGET_W=1080    # target canvas width -- default matches vertical short-form
 TARGET_H=1920    # target canvas height -- 9:16, Reels/Shorts/TikTok standard
+LETTERBOX=false  # default: crop-to-fill each cell (no black bars)
+ALLOW_PARTIAL=false  # default: trim clips so the grid always fills evenly
 CRF=23           # quality: lower = better, larger file. 23 = balanced.
 PRESET="fast"    # encoding speed: ultrafast/fast/medium/slow
 TIMEOUT_SECS=600 # hang-safety: kill ffmpeg if it runs longer than this
@@ -105,6 +110,8 @@ while [ $i -lt ${#ARGS[@]} ]; do
         --width)       i=$(( i + 1 )); TARGET_W="${ARGS[$i]}" ;;
         --height)      i=$(( i + 1 )); TARGET_H="${ARGS[$i]}" ;;
         --vertical)    TARGET_W=1080; TARGET_H=1920 ;;
+        --letterbox)   LETTERBOX=true ;;
+        --allow-partial) ALLOW_PARTIAL=true ;;
         --square)      TARGET_W=1080; TARGET_H=1080 ;;
         --landscape)   TARGET_W=1920; TARGET_H=1080 ;;
     esac
@@ -149,6 +156,24 @@ OUT_FILE="$EXPORT/${SEGMENT}_tapestry_grid_${TIMESTAMP}.mp4"
 # BUILD GRID
 # =============================================================================
 N="${#CLIPS[@]}"
+
+# Trim to the largest clip count that fills the grid evenly by default --
+# 5 clips at --cols 3 used to leave the grid's last cell completely empty
+# (pure black, not just letterboxed) since xstack never places anything
+# there. --allow-partial restores the old behavior if you'd rather see
+# fewer clips than lose one to make the grid even.
+if ! $ALLOW_PARTIAL; then
+    TRIMMED_N=$(( (N / COLS) * COLS ))
+    if [ "$TRIMMED_N" -eq 0 ]; then
+        TRIMMED_N="$N"
+        warn "fewer clips than --cols=$COLS -- grid will have empty cells regardless"
+    elif [ "$TRIMMED_N" -lt "$N" ]; then
+        warn "trimmed $((N - TRIMMED_N)) clip(s) so the ${COLS}-column grid fills evenly (use --allow-partial to keep them)"
+        CLIPS=("${CLIPS[@]:0:$TRIMMED_N}")
+        N="$TRIMMED_N"
+    fi
+fi
+
 ROWS=$(( (N + COLS - 1) / COLS ))
 # Cell size is derived from the TARGET canvas (default 1080x1920, standard
 # vertical short-form), not hardcoded -- previously fixed at 480x270
@@ -164,9 +189,20 @@ echo ""
 
 FILTER=""
 for i in "${!CLIPS[@]}"; do
-    FILTER+="[$i:v]scale=${CELL_W}:${CELL_H}:"
-    FILTER+="force_original_aspect_ratio=decrease,"
-    FILTER+="pad=${CELL_W}:${CELL_H}:(ow-iw)/2:(oh-ih)/2[v${i}];"
+    if $LETTERBOX; then
+        # Preserve the full frame, pad with black to fit the cell -- can
+        # letterbox/pillarbox if the cell's aspect ratio doesn't match the
+        # source clip's (e.g. vertical clips in a --cols 3 grid).
+        FILTER+="[$i:v]scale=${CELL_W}:${CELL_H}:"
+        FILTER+="force_original_aspect_ratio=decrease,"
+        FILTER+="pad=${CELL_W}:${CELL_H}:(ow-iw)/2:(oh-ih)/2[v${i}];"
+    else
+        # Default: fill the cell edge to edge, cropping any overflow from
+        # center. No black bars, standard social-grid/mosaic look.
+        FILTER+="[$i:v]scale=${CELL_W}:${CELL_H}:"
+        FILTER+="force_original_aspect_ratio=increase,"
+        FILTER+="crop=${CELL_W}:${CELL_H}[v${i}];"
+    fi
 done
 
 LAYOUT=""

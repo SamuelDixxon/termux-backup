@@ -166,6 +166,88 @@ alias syncup='bash $HOME/.shortcuts/backup-all'
 alias transfer='bash $HOME/.shortcuts/transfer-export'
 alias tapestry='bash $HOME/.shortcuts/tapestry'
 alias sandwich='bash $HOME/.shortcuts/sandwich'
+
+# =============================================================================
+# STAGE ALIASES -- isolated per-stage invocation + regression testing
+# =============================================================================
+# Run any single pipeline stage on its own, without going through the full
+# content-pipeline script. Useful for testing one stage after a change
+# without re-running everything else.
+alias stage1='bash $HOME/.shortcuts/org-camera-album'
+alias stage1b='bash $HOME/.shortcuts/org-camera-album-burn.sh'
+alias stage15grid='bash $HOME/.shortcuts/tapestry'
+alias stage15reel='bash $HOME/.shortcuts/sandwich'
+alias stage2='bash $HOME/.shortcuts/batch-backup'
+alias stage2hot='bash $HOME/.shortcuts/batch-backup --hot'
+alias stage3='bash $HOME/.shortcuts/backup-all'
+alias stage4='python3 $HOME/.shortcuts/.hidden/segment_manager.py'
+alias stage4quick='python3 $HOME/.shortcuts/.hidden/segment_manager.py --quick'
+alias stage5='bash $HOME/.shortcuts/transfer-export'
+
+# Non-destructive regression sweep. Deliberately scoped to Stage 1.5 only
+# (tapestry + sandwich) -- Stage 1's burn path consumes real DCIM/Camera
+# contents, and Stages 2/3/5 touch real zip archives, your actual GitHub
+# repo, and actual transfer targets. None of those should run unattended
+# just because someone typed `regress`. Test those individually via their
+# aliases above, with intent.
+#
+# Prerequisite: needs a few sample clips already sitting in
+# ~/storage/shared/regtest/ -- this tests the scripts, it can't fabricate
+# real video files.
+pipeline_regress() {
+    local TESTSEG="${1:-regtest}"
+    local DATA="$HOME/.shortcuts/.hidden/segments_data.json"
+
+    echo "=== Pipeline regression sweep: $TESTSEG ==="
+    echo ""
+
+    if [ -f "$DATA" ]; then
+        python3 -c "
+import json
+path = '$DATA'
+d = json.load(open(path))
+if not any(s['name'] == '$TESTSEG' for s in d['segments']):
+    new_id = max((s['id'] for s in d['segments']), default=0) + 1
+    d['segments'].append({
+        'id': new_id, 'name': '$TESTSEG',
+        'short_desc': 'regression test segment', 'full_desc': 'regression test segment',
+        'counter': 0, 'hashtags': ['#test']
+    })
+    json.dump(d, open(path, 'w'), indent=2)
+    print(f'Created test segment: $TESTSEG')
+"
+    fi
+
+    local target="$HOME/storage/shared/$TESTSEG"
+    if [ ! -d "$target" ] || [ -z "$(find "$target" -maxdepth 1 -type f 2>/dev/null)" ]; then
+        echo "x No clips found in $target -- add a few sample clips first, then re-run."
+        return 1
+    fi
+
+    local fails=0
+
+    echo "--- Stage 1.5: tapestry (grid) ---"
+    if bash "$HOME/.shortcuts/tapestry" "$TESTSEG" --cols 2 --max 4; then
+        echo "  OK"
+    else
+        echo "  FAIL"
+        fails=$((fails + 1))
+    fi
+    echo ""
+
+    echo "--- Stage 1.5: sandwich (concat) ---"
+    if bash "$HOME/.shortcuts/sandwich" "$TESTSEG" --max 4; then
+        echo "  OK"
+    else
+        echo "  FAIL"
+        fails=$((fails + 1))
+    fi
+    echo ""
+
+    echo "=== Regression: $fails failure(s) ==="
+    return "$fails"
+}
+alias regress='pipeline_regress'
 alias voice='bash $HOME/.shortcuts/voice-command'
 alias socmgr='python3 $HOME/.shortcuts/.hidden/social-manager.py'
 
@@ -366,6 +448,7 @@ alias mks='mkshot'
 # Usage: mkshot-burn pistol
 #        mkshot-burn pistol --dur 4
 #        mkshot-burn pistol --first-only     # label just the first clip
+#        mkshot-burn pistol --timeout 900    # longer clips need more time
 # =============================================================================
 mkshot_burn() {
     local name="$1"
@@ -376,6 +459,7 @@ mkshot_burn() {
         case "$1" in
             --dur)        dur="$2"; shift 2 ;;
             --first-only) first_only=true; shift ;;
+            --timeout)    timeout_secs="$2"; shift 2 ;;
             *)            shift ;;
         esac
     done
@@ -384,8 +468,9 @@ mkshot_burn() {
     local dcim="$shared/DCIM/Camera"
     local dest="$shared/$name"
     local DATA="$HOME/.shortcuts/.hidden/segments_data.json"
+    local timeout_secs=600
 
-    [ -z "$name" ] && echo "Usage: mkshot-burn <segment-name> [--dur N] [--first-only]" && return 1
+    [ -z "$name" ] && echo "Usage: mkshot-burn <segment-name> [--dur N] [--first-only] [--timeout N]" && return 1
     [ ! -f "$DATA" ] && echo "x segments_data.json not found: $DATA" && return 1
 
     local counter
@@ -463,9 +548,16 @@ print(match[0]['counter'] if match else -1)
                 output="${dest}/${base}_labeled.${ext}"
 
                 echo "  [$label] $fname"
-                if _burn_thumb_core "$moved_path" "$output" "$label" "$dur"; then
+                if _burn_thumb_core "$moved_path" "$output" "$label" "$dur" "$timeout_secs"; then
                     termux-media-scan "$output" 2>/dev/null
                     processed=$((processed + 1))
+                    # Belt-and-suspenders: mkshot_burn only ever touches
+                    # freshly-moved files so it doesn't have the rescan-
+                    # the-whole-folder bug burn_thumb_segment/org-camera-
+                    # album-burn.sh had, but relocate anyway for
+                    # consistency across all three burn entry points.
+                    mkdir -p "$dest/.burned_originals"
+                    mv "$moved_path" "$dest/.burned_originals/" 2>/dev/null
                 else
                     echo "  x burn failed on $fname -- skipping this one, counter rolled back, continuing"
                     counter=$((counter - 1))
@@ -934,14 +1026,19 @@ alias waveform='waveform_img'
 # =============================================================================
 # DYNAMIC: per-segment cd aliases
 # =============================================================================
-# Generates a plain alias named after each segment ("pistol", "climb", ...)
-# that cd's straight into ~/storage/shared/<segment>. Built from
-# segments_data.json every shell start, not hardcoded, so it stays in sync
-# as segments get added/renamed/deleted.
+# Generates a SHORT alias (<=5 chars) for each segment ("pistol" -> "pstl",
+# "book review" -> "bkrvw", "dad q&a" -> "dadqa") that cd's straight into
+# ~/storage/shared/<segment>. Built from segments_data.json every shell
+# start, not hardcoded, so it stays in sync as segments get added/renamed.
 #
-# Collision-safe: skips any segment name that's already a real command,
-# function, or alias -- e.g. the "code" segment would otherwise silently
-# shadow an actual `code` CLI (VS Code, etc.) if you ever install one.
+# Abbreviation algorithm lives in seg_alias.py (single source of truth,
+# shared with `seg-aliases` and `seg-alias-set` below) -- not duplicated
+# inline here. See that file's docstring for the exact algorithm and how
+# to override any specific abbreviation you don't like.
+#
+# Collision-safe: skips any alias that's already a real command, function,
+# alias, or claimed by an earlier segment in this same run (e.g. the
+# "code" segment would otherwise silently shadow an actual `code` CLI).
 # Skipped names are reported once at shell start, not silently dropped.
 #
 # This has to run AFTER every other alias/function in this file is defined,
@@ -949,28 +1046,54 @@ alias waveform='waveform_img'
 # =============================================================================
 _generate_segment_aliases() {
     local DATA="$HOME/.shortcuts/.hidden/segments_data.json"
+    local LIB="$HOME/.shortcuts/.hidden/seg_alias.py"
     [ ! -f "$DATA" ] && return 0
+    [ ! -f "$LIB" ] && return 0
 
     local skipped=()
-    while IFS= read -r name; do
+    declare -A seen_aliases
+
+    while IFS=$'\t' read -r name alias_name; do
         [ -z "$name" ] && continue
-        if type -t "$name" >/dev/null 2>&1; then
-            skipped+=("$name")
+
+        if [ -z "$alias_name" ]; then
+            skipped+=("$name (no usable characters)")
             continue
         fi
-        alias "$name"="cd \"\$HOME/storage/shared/$name\""
-    done < <(python3 -c "
-import json
-d = json.load(open('$DATA'))
-for s in d['segments']:
-    print(s['name'])
-" 2>/dev/null)
+        if [ -n "${seen_aliases[$alias_name]:-}" ]; then
+            skipped+=("$name (alias '$alias_name' already used by '${seen_aliases[$alias_name]}')")
+            continue
+        fi
+        if type -t "$alias_name" >/dev/null 2>&1; then
+            skipped+=("$alias_name")
+            continue
+        fi
+
+        seen_aliases["$alias_name"]="$name"
+        alias "$alias_name"="cd \"\$HOME/storage/shared/$name\""
+    done < <(python3 "$LIB" generate 2>/dev/null)
 
     if [ "${#skipped[@]}" -gt 0 ]; then
-        echo "! segment cd-aliases skipped (name already in use): ${skipped[*]}"
+        echo "! segment cd-aliases skipped: ${skipped[*]}"
     fi
 }
 _generate_segment_aliases
+
+# List every segment's current alias (auto-computed or overridden), so you
+# can sanity-check the abbreviations without hunting through `alias -p`.
+alias segaliases='python3 $HOME/.shortcuts/.hidden/seg_alias.py list'
+
+# Hand-tune any specific abbreviation the algorithm didn't get right.
+# Usage: seg-alias-set "book review" bkrw
+seg_alias_set() {
+    local name="$1" custom="$2"
+    if [ -z "$name" ] || [ -z "$custom" ]; then
+        echo 'Usage: seg-alias-set "<segment name>" <alias>'
+        return 1
+    fi
+    python3 "$HOME/.shortcuts/.hidden/seg_alias.py" set-override "$name" "$custom"
+}
+alias segaliasset='seg_alias_set'
 
 # =============================================================================
 # LEGACY ALIASES (kept for compatibility)

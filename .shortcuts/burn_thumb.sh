@@ -34,7 +34,7 @@
 # -----------------------------------------------------------------------------
 _burn_thumb_core() {
     local input="$1" output="$2" label="$3" dur="$4"
-    local timeout_secs="${5:-180}"
+    local timeout_secs="${5:-600}"
     local FFMPEG="/data/data/com.termux/files/usr/bin/ffmpeg"
     [ ! -x "$FFMPEG" ] && echo "  x ffmpeg not found -- pkg install ffmpeg" && return 1
 
@@ -178,6 +178,14 @@ alias burnthumb='burn_thumb'
 #   burn-thumb-segment ~/storage/shared/pistol
 #   burn-thumb-segment ~/storage/shared/pistol --mode newfolder
 #   burn-thumb-segment ~/storage/shared/pistol --mode overwrite --dur 4
+#   burn-thumb-segment ~/storage/shared/pistol --timeout 900
+#
+# SAFE TO RE-RUN: successfully-burned originals get relocated into a
+# hidden .burned_originals/ subfolder (mode copy/newfolder only -- nothing
+# to relocate in overwrite mode, the original IS the output). Re-running
+# this on the same folder after adding more clips only processes the new
+# ones -- it used to rescan and re-burn every original ever moved in,
+# re-incrementing the counter and overwriting outputs each time.
 #
 # --mode copy       (default) leaves originals untouched, writes
 #                    "<name>_labeled.ext" next to each -- matches current
@@ -196,16 +204,18 @@ burn_thumb_segment() {
     shift
     local mode="copy"
     local dur=3
+    local timeout_secs=600
 
     while [ $# -gt 0 ]; do
         case "$1" in
-            --mode) mode="$2"; shift 2 ;;
-            --dur)  dur="$2";  shift 2 ;;
-            *)      shift ;;
+            --mode)    mode="$2"; shift 2 ;;
+            --dur)     dur="$2";  shift 2 ;;
+            --timeout) timeout_secs="$2"; shift 2 ;;
+            *)         shift ;;
         esac
     done
 
-    [ -z "$folder" ] && echo "Usage: burn-thumb-segment <segment_folder> [--mode copy|overwrite|newfolder] [--dur N]" && return 1
+    [ -z "$folder" ] && echo "Usage: burn-thumb-segment <segment_folder> [--mode copy|overwrite|newfolder] [--dur N] [--timeout N]" && return 1
     [ ! -d "$folder" ] && echo "x Folder not found: $folder" && return 1
 
     local DATA="$HOME/.shortcuts/.hidden/segments_data.json"
@@ -235,8 +245,12 @@ print(match[0]['counter'] if match else -1)
         mkdir -p "$outdir"
     fi
 
-    echo "Segment: $segment | starting counter: $counter | mode: $mode"
+    echo "Segment: $segment | starting counter: $counter | mode: $mode | timeout: ${timeout_secs}s"
 
+    # ! -name '.*' already excludes hidden dirs like .burned_originals/ from
+    # ever being descended into (maxdepth 1 doesn't recurse regardless) --
+    # that's what makes the accumulation fix below actually work: once an
+    # original is relocated there, it's permanently invisible to this scan.
     local processed=0
     while IFS= read -r -d '' f; do
         counter=$((counter + 1))
@@ -252,8 +266,16 @@ print(match[0]['counter'] if match else -1)
         esac
 
         echo "  [$label] $(basename "$f")"
-        if _burn_thumb_core "$f" "$output" "$label" "$dur"; then
-            [ "$mode" = "overwrite" ] && mv "$output" "$f"
+        if _burn_thumb_core "$f" "$output" "$label" "$dur" "$timeout_secs"; then
+            if [ "$mode" = "overwrite" ]; then
+                mv "$output" "$f"
+            else
+                # Relocate the original out of the scan path so a future
+                # re-run of this same command doesn't rediscover and
+                # re-burn it -- preserved, just moved, never deleted.
+                mkdir -p "$folder/.burned_originals"
+                mv "$f" "$folder/.burned_originals/" 2>/dev/null
+            fi
             termux-media-scan "$output" 2>/dev/null
             processed=$((processed + 1))
         else

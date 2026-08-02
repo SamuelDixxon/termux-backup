@@ -1,0 +1,184 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# content-pipeline-segment-first
+# =============================================================================
+# PURPOSE:
+#   The "session-first" pipeline design proposed in README.md, now actually
+#   built: segment_manager runs FIRST -- picks the segment, copies hashtags,
+#   increments the counter (or not -- see segment_manager's own fix), and
+#   writes session.json -- and that segment name flows into DCIM/Camera
+#   routing with no duplicate prompt, instead of org-camera-album re-asking
+#   for a folder name from scratch.
+#
+#   This does NOT replace your original pipeline. It's a second, parallel
+#   entry point. See the rename instructions below for keeping both.
+#
+# STEPS:
+#   1. segment_manager.py    -- pick/search a segment, copy hashtags,
+#                                writes session.json (segment, counter, mode)
+#   2. Route DCIM/Camera using that segment name, no re-prompt:
+#        y (default) -> mkshot_burn <segment>  (move + label + counter update)
+#        n           -> mkshot <segment>       (move only, no burn)
+#   3. batch-backup   -- same y/c/n mode choice as the original pipeline
+#   4. backup-all     -- rsync + git push
+#   5. transfer-export -- SD card or Raspberry Pi
+#
+# ASSUMPTION FLAGGED:
+#   I don't have your actual content-pipeline script's source -- only the
+#   documented step behavior from README.md (batch-backup's y/c/n modes,
+#   backup-all, transfer-export). This orchestrator calls those by path
+#   with their documented flags. Built directly against real source for
+#   the two things that changed (segment_manager.py, and mkshot/mkshot_burn
+#   in .bashrc) -- if batch-backup/backup-all/transfer-export's actual CLI
+#   contracts differ from what's documented, share those scripts and I'll
+#   correct the calls below, not guess further.
+#
+# HARDENED against a real stdin-sharing gotcha: python3's stdin reads are
+# block-buffered when stdin is a non-tty (a pipe), and can consume MORE
+# bytes than the exact lines it needed -- silently stealing input meant
+# for the `read` prompts below it in this same script. Doesn't affect you
+# typing at a real interactive terminal (a tty delivers keystrokes as
+# typed, nothing to over-buffer), but it's a real risk if this script is
+# ever invoked non-interactively (a widget, `expect`, automation). Fixed
+# by explicitly pointing segment_manager's stdin at /dev/tty instead of
+# letting it inherit this script's own (possibly piped) stdin.
+#
+# RENAME YOUR EXISTING PIPELINE (on-device -- I don't have that file to
+# move myself):
+#   mv ~/.shortcuts/content-pipeline ~/.shortcuts/content-pipeline-camera-first
+#
+# INSTALL:
+#   cp content-pipeline-segment-first ~/.shortcuts/
+#   chmod +x ~/.shortcuts/content-pipeline-segment-first
+#
+# DEPENDENCIES:
+#   Everything the original pipeline already needs, plus mkshot/mkshot_burn
+#   from .bashrc (sourced below, same pattern batch-backup already uses:
+#   "source .bashrc OR true -- prevents set -e silent exit").
+# =============================================================================
+
+set -x
+
+if [ -z "$HOME" ]; then
+    export HOME="/data/data/com.termux/files/home"
+fi
+export PATH="/data/data/com.termux/files/usr/bin:$PATH"
+
+# mkshot / mkshot_burn live in .bashrc, not standalone scripts.
+source "$HOME/.bashrc" 2>/dev/null || true
+
+SESSION_FILE="$HOME/.shortcuts/.hidden/session.json"
+MANAGER="$HOME/.shortcuts/.hidden/segment_manager.py"
+
+# =============================================================================
+# STEP 1: segment_manager -- pick segment, copy hashtags, write session.json
+# =============================================================================
+echo ""
+echo "=== Step 1: segment_manager -- pick segment, copy hashtags ==="
+if [ ! -f "$MANAGER" ]; then
+    echo "x segment_manager.py not found: $MANAGER"
+    set +x
+    exit 1
+fi
+
+# Explicit /dev/tty redirect -- see HARDENED note above. Falls back to
+# inherited stdin only if no tty is available at all (in which case this
+# whole interactive script wouldn't sensibly run anyway).
+if [ -e /dev/tty ]; then
+    python3 "$MANAGER" < /dev/tty
+else
+    python3 "$MANAGER"
+fi
+
+if [ ! -f "$SESSION_FILE" ]; then
+    echo "x session.json not found after segment_manager -- did you pick a segment"
+    echo "  and exit normally (option 1/2/7, not Ctrl+C or 'q' without picking)?"
+    set +x
+    exit 1
+fi
+
+SEGMENT=$(python3 -c "
+import json
+try:
+    print(json.load(open('$SESSION_FILE')).get('segment', ''))
+except Exception:
+    print('')
+" 2>/dev/null)
+
+if [ -z "$SEGMENT" ]; then
+    echo "x Could not read a segment name from session.json"
+    set +x
+    exit 1
+fi
+
+echo "Segment for this session: $SEGMENT"
+
+# =============================================================================
+# STEP 2: route DCIM/Camera -> $SEGMENT, no re-prompt for the name
+# =============================================================================
+echo ""
+echo "=== Step 2: route DCIM/Camera -> $SEGMENT ==="
+read -rp "Burn thumbnail labels while routing? (y/n, default y): " BURN_CHOICE < /dev/tty
+BURN_CHOICE="${BURN_CHOICE:-y}"
+
+if [ "${BURN_CHOICE,,}" = "y" ]; then
+    if ! type -t mkshot_burn >/dev/null 2>&1; then
+        echo "x mkshot_burn function not found -- check .bashrc sourced correctly"
+        set +x
+        exit 1
+    fi
+    mkshot_burn "$SEGMENT"
+else
+    if ! type -t mkshot >/dev/null 2>&1; then
+        echo "x mkshot function not found -- check .bashrc sourced correctly"
+        set +x
+        exit 1
+    fi
+    mkshot "$SEGMENT"
+fi
+
+# =============================================================================
+# STEP 3: batch-backup -- same y/c/n mode choice as the original pipeline
+# =============================================================================
+echo ""
+echo "=== Step 3: batch-backup ==="
+read -rp "Backup mode -- y=hot (default) / c=custom / n=single folder: " BACKUP_MODE < /dev/tty
+BACKUP_MODE="${BACKUP_MODE:-y}"
+
+case "${BACKUP_MODE,,}" in
+    c)
+        bash "$HOME/.shortcuts/batch-backup"
+        ;;
+    n)
+        # README documents step 2's "n" path as a distinct single-folder
+        # picker script (backup-folder), not batch-backup itself. Flagged:
+        # verify this script name/path is correct on your device.
+        if [ -f "$HOME/.shortcuts/backup-folder" ]; then
+            bash "$HOME/.shortcuts/backup-folder"
+        else
+            echo "! backup-folder not found, falling back to batch-backup interactive"
+            bash "$HOME/.shortcuts/batch-backup"
+        fi
+        ;;
+    *)
+        bash "$HOME/.shortcuts/batch-backup" --hot
+        ;;
+esac
+
+# =============================================================================
+# STEP 4: backup-all -- rsync + git push
+# =============================================================================
+echo ""
+echo "=== Step 4: backup-all ==="
+bash "$HOME/.shortcuts/backup-all"
+
+# =============================================================================
+# STEP 5: transfer-export -- SD card or Raspberry Pi
+# =============================================================================
+echo ""
+echo "=== Step 5: transfer-export ==="
+bash "$HOME/.shortcuts/transfer-export"
+
+echo ""
+echo "OK Pipeline complete: $SEGMENT"
+set +x

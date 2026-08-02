@@ -138,6 +138,24 @@ def do_copy(seg):
 # QUICK-COPY  (--quick flag / widget)
 # =============================================================================
 
+def finish_copy(data, seg):
+    """Copy hashtags, then ask whether to increment the counter. This is
+    the fix for counter/hashtag drift: previously every copy silently
+    incremented, so re-grabbing hashtags for a post you're still editing
+    (or already grabbed once) would push the counter out of sync with
+    what you'd actually posted. Defaults to yes (Enter) to preserve
+    existing muscle memory -- only skips on an explicit "n"."""
+    do_copy(seg)
+    inc = input(f"{C['gray']}Increment counter? (Y/n): {C['reset']}").strip().lower()
+    if inc != "n":
+        seg["counter"] += 1
+        print(f"{C['green']}Counter -> {seg['counter']}.{C['reset']}")
+    else:
+        print(f"{C['yellow']}Counter unchanged (hashtags only).{C['reset']}")
+    write_session(seg["name"], seg["counter"])
+    save_data(data)
+
+
 def quick_copy_mode(data):
     hot = sorted([s for s in data["segments"] if s["counter"] >= 50],
                  key=lambda s: -s["counter"])
@@ -155,10 +173,7 @@ def quick_copy_mode(data):
     if not raw.isdigit() or not (1 <= int(raw) <= len(hot)):
         print("Cancelled."); return
     seg = hot[int(raw) - 1]
-    do_copy(seg)
-    seg["counter"] += 1
-    write_session(seg["name"], seg["counter"])
-    save_data(data)
+    finish_copy(data, seg)
     input(f"\n{C['gray']}Enter to close...{C['reset']}")
 
 
@@ -182,10 +197,7 @@ def search_and_copy(data):
         seg = filtered[int(input(f"\n{C['gray']}Pick: {C['reset']}")) - 1]
     except Exception:
         print(f"{C['red']}Invalid.{C['reset']}"); input("Enter..."); return
-    do_copy(seg)
-    seg["counter"] += 1
-    write_session(seg["name"], seg["counter"])
-    save_data(data)
+    finish_copy(data, seg)
     input("\nEnter...")
 
 
