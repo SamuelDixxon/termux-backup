@@ -54,9 +54,15 @@ applied to consumer Android hardware instead of a DUT:
 - [Why This Project](#why-this-project)
 - [Architecture](#architecture)
 - [Data Flow](#data-flow)
-- [Pipeline v3 (current)](#pipeline-v3-current)
-- [Pipeline v4 (proposed)](#pipeline-v4-proposed)
-- [Pipeline v5 (proposed) -- burn integration](#pipeline-v5-proposed----burn-integration)
+- [Pipeline Stages](#pipeline-stages)
+  - [Stage 1 -- Capture Routing](#stage-1----capture-routing)
+  - [Stage 1.5 -- Content Composition](#stage-15----content-composition-optional-parallel)
+  - [Stage 2 -- Archival](#stage-2----archival)
+  - [Stage 3 -- Sync](#stage-3----sync)
+  - [Stage 4 -- Metadata](#stage-4----metadata)
+  - [Stage 5 -- Transfer](#stage-5----transfer)
+- [Stage Aliases (regression testing)](#stage-aliases-regression-testing)
+- [Future Proposal -- Session-First Reordering (v4)](#future-proposal----session-first-reordering-v4)
 - [Component Deep Dives](#component-deep-dives)
   - [batch-backup](#batch-backup)
   - [segment_manager](#segment_manager)
@@ -162,58 +168,197 @@ of the burn tooling guessed wrong on).
 
 ---
 
-## Pipeline v3 (current)
+## Pipeline Stages
 
-The current 5-step post-shoot workflow. Run with one command:
+Each stage below is independently runnable -- see
+[Stage Aliases](#stage-aliases-regression-testing) for isolated invocation
+and a non-destructive regression sweep. The choice of *which* script runs
+a stage lives at the stage level, not buried in a single monolithic
+flowchart -- each stage gets its own small diagram instead of one
+giant combined one.
 
-```bash
-bash ~/.shortcuts/content-pipeline
+```mermaid
+flowchart LR
+    ST1[Stage 1
+Capture Routing]
+    ST15[Stage 1.5
+Content Composition
+optional, parallel]
+    ST2[Stage 2
+Archival]
+    ST3[Stage 3
+Sync]
+    ST4[Stage 4
+Metadata]
+    ST5[Stage 5
+Transfer]
+
+    ST1 --> ST2 --> ST3 --> ST4 --> ST5
+    ST1 -.optional, any time.-> ST15
 ```
 
-At step 2 you choose backup mode: `y` = batch-hot (default), `c` = custom select, `n` = single folder.
+Full end-to-end run: `bash ~/.shortcuts/content-pipeline`.
+
+---
+
+### Stage 1 -- Capture Routing
+
+Two options, chosen per-run: plain (works for any folder, no counter) or
+burn (requires the segment to already exist, since it needs a live
+counter to label against). This was the "Pipeline v5" proposal in earlier
+versions of this doc -- folded in directly now since the design settled
+and the underlying scripts (`mkshot_burn`, `org-camera-album-burn.sh`)
+have been through several real rounds of bug fixes.
 
 ```mermaid
 flowchart TD
-    START([content-pipeline]) --> S1
+    START1([Stage 1: Capture Routing]) --> CHOICE1{Which script?}
+    CHOICE1 -->|1A: plain| PLAIN1[org-camera-album
+free-text folder name
+move only, no counter]
+    CHOICE1 -->|1B: burn| CHECK1{segment exists in
+segments_data.json?}
+    CHECK1 -->|yes| BURN1[org-camera-album-burn /
+mkshot-burn segment
+move + burn + counter update]
+    CHECK1 -->|no| FALLBACK1[fall back to plain,
+or seg-add first]
+    PLAIN1 --> DONE1([-> Stage 2])
+    BURN1 --> DONE1
+    FALLBACK1 --> DONE1
+```
 
-    S1[Step 1
-org-camera-album
-DCIM to named folder]
-    S2[Step 2
-batch-backup
-zip to Export]
-    S3[Step 3
-backup-all
-rsync + GitHub]
-    S4[Step 4
-segment_manager
-hashtags to clipboard]
-    S5[Step 5
-transfer-export
-SD card or Pi]
+**Open question for actual `content-pipeline` integration:** does Stage 1
+currently know the segment name ahead of time, or is it picked
+interactively mid-step (as `org-camera-album`'s free-text dialog does
+today)? That determines whether the 1A/1B choice happens before or after
+name entry. Share that script and this becomes a real diff instead of a
+design doc.
 
-    S1 --> S2
-    S2 --> S3
-    S3 --> S4
-    S4 --> S5
+---
 
-    S2 -->|y| HOT[--hot
-auto-zip counter gte 50]
-    S2 -->|c| CUSTOM[interactive
-checkbox dialog]
-    S2 -->|n| SINGLE[backup-folder
-single picker]
+### Stage 1.5 -- Content Composition (optional, parallel)
 
-    HOT --> S3
-    CUSTOM --> S3
-    SINGLE --> S3
+Not part of the backup chain -- a different purpose entirely (content
+production, not archival), so it doesn't gate Stages 2-5. Runs any time
+after Stage 1 has populated a folder.
+
+```mermaid
+flowchart TD
+    START15([Stage 1.5: Content Composition
+optional, any time after Stage 1]) --> WHICH15{tapestry or sandwich?}
+    WHICH15 -->|grid, short-form| TAP15[tapestry
+NxN simultaneous grid
+crop-to-fill by default]
+    WHICH15 -->|concat, long-form| SAND15[sandwich
+sequential reel]
+    TAP15 --> OUT15([Export/*.mp4 --
+independent of backup stages])
+    SAND15 --> OUT15
 ```
 
 ---
 
-## Pipeline v4 (proposed)
+### Stage 2 -- Archival
 
-Key change: `segment_manager` moves to **step 1** so the selected segment name
+```mermaid
+flowchart TD
+    START2([Stage 2: Archival]) --> MODE2{batch-backup mode}
+    MODE2 -->|y, default| HOT2[--hot
+auto-zip counter gte 50]
+    MODE2 -->|c| CUSTOM2[interactive
+checkbox dialog]
+    MODE2 -->|n| SINGLE2[single folder
+picker]
+    HOT2 & CUSTOM2 & SINGLE2 --> DONE2([-> Stage 3])
+```
+
+---
+
+### Stage 3 -- Sync
+
+```mermaid
+flowchart LR
+    START3([Stage 3: Sync]) --> BA3[backup-all:
+rsync + git push] --> DONE3([-> Stage 4])
+```
+
+---
+
+### Stage 4 -- Metadata
+
+```mermaid
+flowchart LR
+    START4([Stage 4: Metadata]) --> SM4[segment_manager:
+hashtags to clipboard] --> DONE4([-> Stage 5])
+```
+
+Full internal detail (menu options, clipboard format) is in the
+[segment_manager](#segment_manager) deep dive below -- this is just the
+stage-level view.
+
+---
+
+### Stage 5 -- Transfer
+
+```mermaid
+flowchart LR
+    START5([Stage 5: Transfer]) --> TE5[transfer-export:
+SD card or Raspberry Pi] --> DONE5([pipeline complete])
+```
+
+---
+
+## Stage Aliases (regression testing)
+
+New `.bashrc` aliases for running any single stage in isolation, without
+going through the full `content-pipeline` script -- useful for testing one
+stage after a change without re-running everything else.
+
+```bash
+# Stage 1
+stage1        # org-camera-album (plain)
+stage1b       # org-camera-album-burn.sh
+
+# Stage 1.5
+stage15grid   # tapestry
+stage15reel   # sandwich
+
+# Stage 2
+stage2        # batch-backup (interactive)
+stage2hot     # batch-backup --hot
+
+# Stage 3
+stage3        # backup-all
+
+# Stage 4
+stage4        # segment_manager.py
+stage4quick   # segment_manager.py --quick
+
+# Stage 5
+stage5        # transfer-export
+```
+
+**`regress`** -- a non-destructive smoke test, not a full pipeline run. It
+exercises Stage 1.5 (`tapestry` + `sandwich`) against a dedicated
+`regtest` segment, auto-created in `segments_data.json` if missing, and
+reports pass/fail per check. Deliberately scoped to Stage 1.5 only:
+Stage 1's burn path consumes real `DCIM/Camera` contents, and Stages 2/3/5
+touch real zip archives, your actual GitHub repo, and actual transfer
+targets -- none of those are things an automated "just testing" command
+should run unattended. Test those stages individually via their aliases
+above, with intent, not via a sweep.
+
+**Prerequisite:** `regress` needs a few sample clips already sitting in
+`~/storage/shared/regtest/` once, since it can't fabricate real video
+files -- it's testing the scripts, not generating fixtures.
+
+---
+
+## Future Proposal -- Session-First Reordering (v4)
+
+Independent of the Stage 1 burn/plain choice above -- a different idea:
+`segment_manager` moves to **step 1** so the selected segment name
 flows via `session.json` into every downstream step. No duplicate prompts.
 
 ```mermaid
@@ -280,83 +425,6 @@ SD or Pi])
 | `dated` | `hike_20260615/` | one-off or travel content |
 
 ---
-
-## Pipeline v5 (proposed) -- burn integration
-
-**Status: design finalized, integration pending `content-pipeline`'s
-source.** Step 1 becomes a choice, not a single script: plain
-`org-camera-album` (move only, today's behavior, works for any new or
-existing folder name) or `org-camera-album-burn` / `mkshot_burn` (move +
-sequential thumbnail label + live counter update in `segments_data.json`).
-Neither replaces the other -- picking plain keeps the simple free-text
-workflow for one-off folders; picking burn requires the segment to already
-exist (it needs a counter to burn against).
-
-The building block already exists and is proven: `mkshot_burn` (`mksb`) and
-`org-camera-album-burn.sh` have been exercised through several rounds of
-real bug fixes this session -- frozen-argument parsing, silent ffmpeg
-failures, the ffmpeg interactive-stdin hang, hidden-dotfile and
-already-labeled-file exclusion. Wiring the choice into the pipeline is
-composition, not new development.
-
-```mermaid
-flowchart TD
-    START5([content-pipeline v5]) --> S1B
-
-    S1B{Step 1: how to route
-DCIM/Camera?}
-    S1B -->|1: plain| PLAIN5[org-camera-album
-free-text folder name
-move only, no counter]
-    S1B -->|2: burn, default| BURN5{segment exists in
-segments_data.json?}
-
-    BURN5 -->|yes| DOBURN[org-camera-album-burn /
-mkshot-burn segment
-move + burn + counter update]
-    BURN5 -->|no| FALLBACK[fall back to plain,
-or prompt: seg-add first?]
-
-    PLAIN5 --> S2
-    DOBURN --> S2
-    FALLBACK --> S2
-
-    S2[Step 2
-batch-backup
-zip to Export]
-    S3[Step 3
-backup-all
-rsync + GitHub]
-    S4[Step 4
-segment_manager
-hashtags to clipboard]
-    S5[Step 5
-transfer-export
-SD card or Pi]
-
-    S2 --> S3 --> S4 --> S5
-```
-
-**Why step 1, not a separate step:** the burn variants already do the DCIM
-move themselves -- each is a superset of what `org-camera-album` does
-today, not an addition after it. Slotting the choice in at step 1 (rather
-than a new step 1.5) avoids moving the same files twice.
-
-**The one real branch to design carefully:** what happens when someone
-picks the burn path for a segment that doesn't exist yet. Two reasonable
-options -- silently fall back to plain (safe, but surprising if you
-expected labels), or prompt to run `seg-add` inline before continuing
-(matches the existing pattern of `batch-backup`'s in-flow `m`/`a`/`s`
-prompts). Leaning toward the second: consistent with how the rest of the
-pipeline already handles "needs a decision" moments.
-
-**Open question for content-pipeline integration:** does step 1 currently
-know the segment name ahead of time, or does the user pick it interactively
-mid-step (as `org-camera-album`'s free-text dialog does today)? That
-determines whether the choice prompt above happens before or after name
-entry. Flagging this now rather than guessing at `content-pipeline`'s
-actual prompt flow -- share that script and this becomes a real diff
-instead of a design doc.
 
 ---
 
@@ -442,13 +510,12 @@ has a zip in Export/, you are prompted:
 
 Python REPL. The counter drives `--hot` targeting in batch-backup passively.
 
-**Corrected this pass:** the clipboard used to output two lines -- a
-`<segment><counter>` title line, then hashtags picked per-platform (YouTube
-15 tags, Instagram 30, TikTok 10, All 15, each with platform-specific
-"booster" tags appended). Both of those were removed on request: the
+**Corrected this pass:** the clipboard used to output a `<segment><counter>`
+title line plus platform-tailored hashtag sets. Both were removed: the
 clipboard now copies **hashtags only**, straight from the segment's own
 `hashtags` list in `segments_data.json`, with no platform branching and no
-title line.
+title line -- system state lives entirely in that one JSON schema, not
+duplicated per output target.
 
 ```mermaid
 flowchart TD
@@ -552,7 +619,7 @@ exists?}
     CHECK -->|no| FAIL3([exit 1
 run termux-setup-storage])
     CHECK -->|yes| DIALOG[termux-dialog text
-"Enter NEW folder name"]
+prompt: Enter NEW folder name]
     DIALOG -->|empty| EXIT2([exit 0
 nothing entered])
     DIALOG -->|name entered| MKDIR[mkdir -p
