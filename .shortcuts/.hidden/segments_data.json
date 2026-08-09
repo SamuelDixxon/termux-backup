@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 235,
+      "counter": 239,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 90,
+      "counter": 93,
       "hashtags": [
         "#jumprope",
         "#skipping",
@@ -211,7 +211,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 72,
+      "counter": 74,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -239,7 +239,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 568,
+      "counter": 573,
       "hashtags": [
         "#squats",
         "#pistolsquats",
