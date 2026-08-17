@@ -74,10 +74,10 @@ done
 # ARGUMENT PARSING
 # =============================================================================
 SEGMENT="$1"
-MAX_CLIPS=20
+MAX_CLIPS=50
 CRF=23
 PRESET="fast"
-TIMEOUT_SECS=600
+TIMEOUT_SECS=180
 
 shift
 ARGS=("$@")
