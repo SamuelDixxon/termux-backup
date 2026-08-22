@@ -211,7 +211,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 76,
+      "counter": 77,
       "hashtags": [
         "#basketball",
         "#ball",
@@ -239,7 +239,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 616,
+      "counter": 627,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -399,6 +399,19 @@
       "full_desc": "dummy for tapestry",
       "counter": 0,
       "hashtags": []
+    },
+    {
+      "id": 34,
+      "name": "grip",
+      "short_desc": "training gri0 ability",
+      "full_desc": "type stuffs with grip strength, similar to climb",
+      "counter": 3,
+      "hashtags": [
+        "#gripstrength",
+        "#hold",
+        "#hang",
+        "#forearm"
+      ]
     }
   ]
 }
