@@ -69,6 +69,7 @@ source "$HOME/.bashrc" 2>/dev/null || true
 
 SESSION_FILE="$HOME/.shortcuts/.hidden/session.json"
 MANAGER="$HOME/.shortcuts/.hidden/segment_manager.py"
+DATA_FILE="$HOME/.shortcuts/.hidden/segments_data.json"
 
 # =============================================================================
 # STEP 1: segment_manager -- pick segment, copy hashtags, write session.json
@@ -118,23 +119,61 @@ echo "Segment for this session: $SEGMENT"
 # =============================================================================
 echo ""
 echo "=== Step 2: route DCIM/Camera -> $SEGMENT ==="
-read -rp "Burn thumbnail labels while routing? (y/n, default y): " BURN_CHOICE < /dev/tty
-BURN_CHOICE="${BURN_CHOICE:-y}"
 
-if [ "${BURN_CHOICE,,}" = "y" ]; then
-    if ! type -t mkshot_burn >/dev/null 2>&1; then
-        echo "x mkshot_burn function not found -- check .bashrc sourced correctly"
+SERIES_MODE=$(python3 -c "
+import json
+try:
+    d = json.load(open('$DATA_FILE'))
+    match = [s for s in d['segments'] if s['name'] == '$SEGMENT']
+    print('true' if match and match[0].get('series_mode') else 'false')
+except Exception:
+    print('false')
+" 2>/dev/null)
+
+if [ "$SERIES_MODE" = "true" ]; then
+    # Mini-series (e.g. "m" push/pull/legs): numbered folders, manual burn.
+    # session.json's counter is already the post-increment value from
+    # Step 1 -- that IS the episode number this footage belongs to.
+    COUNTER=$(python3 -c "
+import json
+try:
+    print(json.load(open('$SESSION_FILE')).get('counter', ''))
+except Exception:
+    print('')
+" 2>/dev/null)
+
+    if [ -z "$COUNTER" ]; then
+        echo "x Could not read counter from session.json for series routing"
         set +x
         exit 1
     fi
-    mkshot_burn "$SEGMENT"
-else
+
+    echo "Series mode: routing to ${SEGMENT}${COUNTER}/ (manual burn -- not auto-labeled)"
     if ! type -t mkshot >/dev/null 2>&1; then
         echo "x mkshot function not found -- check .bashrc sourced correctly"
         set +x
         exit 1
     fi
-    mkshot "$SEGMENT"
+    mkshot "$SEGMENT" --folder-suffix "$COUNTER"
+else
+    read -rp "Burn thumbnail labels while routing? (y/n, default y): " BURN_CHOICE < /dev/tty
+    BURN_CHOICE="${BURN_CHOICE:-y}"
+
+    if [ "${BURN_CHOICE,,}" = "y" ]; then
+        if ! type -t mkshot_burn >/dev/null 2>&1; then
+            echo "x mkshot_burn function not found -- check .bashrc sourced correctly"
+            set +x
+            exit 1
+        fi
+        mkshot_burn "$SEGMENT"
+    else
+        if ! type -t mkshot >/dev/null 2>&1; then
+            echo "x mkshot function not found -- check .bashrc sourced correctly"
+            set +x
+            exit 1
+        fi
+        mkshot "$SEGMENT"
+    fi
 fi
 
 # =============================================================================

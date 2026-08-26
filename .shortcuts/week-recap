@@ -1,0 +1,118 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# week-recap
+# =============================================================================
+# Generates a title + description for bundling a week's worth of shorts
+# into one long-form sandwich upload -- e.g. "Pistol Squat Progress
+# (573-615)". Computes the previous full Monday-Sunday range, and tracks
+# each segment's counter between runs so the range is automatic after the
+# first use.
+#
+# HOW THE COUNTER RANGE WORKS:
+#   End   = the segment's counter right now.
+#   Start = the counter value the last time week-recap ran for this
+#           segment (saved in week_recap_state.json), or --start on first use.
+#
+# USAGE:
+#   week-recap pistol                  # previous Mon-Sun, auto range
+#   week-recap pistol --start 573      # first run: set the starting point
+#   week-recap pistol --this-week      # current week instead of previous
+#
+# INSTALL:
+#   cp week-recap ~/.shortcuts/
+#   chmod +x ~/.shortcuts/week-recap
+# =============================================================================
+
+if [ -z "$HOME" ]; then
+    export HOME="/data/data/com.termux/files/home"
+fi
+export PATH="/data/data/com.termux/files/usr/bin:$PATH"
+
+DATA_FILE="$HOME/.shortcuts/.hidden/segments_data.json"
+STATE_FILE="$HOME/.shortcuts/.hidden/week_recap_state.json"
+
+SEGMENT="$1"
+shift
+START_OVERRIDE=""
+THIS_WEEK=false
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --start)      START_OVERRIDE="$2"; shift 2 ;;
+        --this-week)  THIS_WEEK=true; shift ;;
+        *)            shift ;;
+    esac
+done
+
+if [ -z "$SEGMENT" ]; then
+    echo "Usage: week-recap <segment> [--start N] [--this-week]"
+    exit 1
+fi
+if [ ! -f "$DATA_FILE" ]; then
+    echo "x segments_data.json not found: $DATA_FILE"
+    exit 1
+fi
+
+# -- Date range: Monday through Sunday -----------------------------------
+# %u gives ISO weekday, 1=Monday..7=Sunday.
+TODAY_DOW=$(date +%u)
+CURRENT_MONDAY=$(date -d "-$((TODAY_DOW - 1)) days" +%Y-%m-%d)
+
+if $THIS_WEEK; then
+    RANGE_MONDAY="$CURRENT_MONDAY"
+else
+    RANGE_MONDAY=$(date -d "$CURRENT_MONDAY -7 days" +%Y-%m-%d)
+fi
+RANGE_SUNDAY=$(date -d "$RANGE_MONDAY +6 days" +%Y-%m-%d)
+RANGE_LABEL="$(date -d "$RANGE_MONDAY" '+%b %-d') - $(date -d "$RANGE_SUNDAY" '+%b %-d, %Y')"
+
+# -- Counter range ----------------------------------------------------------
+END_COUNTER=$(python3 -c "
+import json
+d = json.load(open('$DATA_FILE'))
+match = [s for s in d['segments'] if s['name'] == '$SEGMENT']
+print(match[0]['counter'] if match else -1)
+")
+if [ "$END_COUNTER" = "-1" ]; then
+    echo "x Segment '$SEGMENT' not found in segments_data.json"
+    exit 1
+fi
+
+if [ -n "$START_OVERRIDE" ]; then
+    START_COUNTER="$START_OVERRIDE"
+else
+    START_COUNTER=$(python3 -c "
+import json, os
+path = '$STATE_FILE'
+if os.path.exists(path):
+    state = json.load(open(path))
+    print(state.get('$SEGMENT', $END_COUNTER))
+else:
+    print($END_COUNTER)
+")
+fi
+
+# -- Save this run's counter as next run's baseline --------------------------
+python3 -c "
+import json, os
+path = '$STATE_FILE'
+state = {}
+if os.path.exists(path):
+    state = json.load(open(path))
+state['$SEGMENT'] = $END_COUNTER
+os.makedirs(os.path.dirname(path), exist_ok=True)
+json.dump(state, open(path, 'w'), indent=2)
+"
+
+REPS=$((END_COUNTER - START_COUNTER))
+SEG_TITLE="$(echo "${SEGMENT:0:1}" | tr '[:lower:]' '[:upper:]')${SEGMENT:1}"
+
+echo ""
+echo "Title:"
+echo "  ${SEG_TITLE} Progress (${START_COUNTER}-${END_COUNTER})"
+echo ""
+echo "Description:"
+echo "  A week of ${SEGMENT} training, ${RANGE_LABEL}. ${REPS} logged this"
+echo "  week -- every short from these sessions, bundled into one recap."
+echo "  Segment #${START_COUNTER} through #${END_COUNTER}."
+echo ""
+echo "(Baseline saved for next run: ${END_COUNTER})"
