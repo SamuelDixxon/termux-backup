@@ -99,7 +99,7 @@
       "name": "food",
       "short_desc": "food challenges",
       "full_desc": "food challenges and education",
-      "counter": 3,
+      "counter": 4,
       "hashtags": [
         "#foodchallenge",
         "#food",
@@ -239,7 +239,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 627,
+      "counter": 626,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -359,7 +359,7 @@
       "name": "integral",
       "short_desc": "practice solving integrals at integral.com",
       "full_desc": "integral practice post college and learning techniques",
-      "counter": 32,
+      "counter": 33,
       "hashtags": [
         "#integral",
         "#math",
