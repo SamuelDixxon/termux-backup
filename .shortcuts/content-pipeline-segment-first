@@ -130,50 +130,47 @@ except Exception:
     print('false')
 " 2>/dev/null)
 
+# series_mode only supplies DEFAULTS for the two prompts below -- it no
+# longer hard-branches and skips asking. Folder-numbering and burn-or-not
+# are independent choices every time (e.g. you might want a numbered m140
+# folder AND auto-burn on a given day, or a plain unnumbered folder for a
+# non-series segment) -- always asked, never silently decided for you.
+DEFAULT_SUFFIX=""
+DEFAULT_BURN="y"
 if [ "$SERIES_MODE" = "true" ]; then
-    # Mini-series (e.g. "m" push/pull/legs): numbered folders, manual burn.
-    # session.json's counter is already the post-increment value from
-    # Step 1 -- that IS the episode number this footage belongs to.
-    COUNTER=$(python3 -c "
+    DEFAULT_SUFFIX=$(python3 -c "
 import json
 try:
     print(json.load(open('$SESSION_FILE')).get('counter', ''))
 except Exception:
     print('')
 " 2>/dev/null)
+    DEFAULT_BURN="n"
+fi
 
-    if [ -z "$COUNTER" ]; then
-        echo "x Could not read counter from session.json for series routing"
+read -rp "Append a number to the folder name? (e.g. 140 for ${SEGMENT}140, default: ${DEFAULT_SUFFIX:-none}): " FOLDER_SUFFIX < /dev/tty
+FOLDER_SUFFIX="${FOLDER_SUFFIX:-$DEFAULT_SUFFIX}"
+
+read -rp "Burn thumbnail labels while routing? (y/n, default ${DEFAULT_BURN}): " BURN_CHOICE < /dev/tty
+BURN_CHOICE="${BURN_CHOICE:-$DEFAULT_BURN}"
+
+FOLDER_ARGS=()
+[ -n "$FOLDER_SUFFIX" ] && FOLDER_ARGS=(--folder-suffix "$FOLDER_SUFFIX")
+
+if [ "${BURN_CHOICE,,}" = "y" ]; then
+    if ! type -t mkshot_burn >/dev/null 2>&1; then
+        echo "x mkshot_burn function not found -- check .bashrc sourced correctly"
         set +x
         exit 1
     fi
-
-    echo "Series mode: routing to ${SEGMENT}${COUNTER}/ (manual burn -- not auto-labeled)"
+    mkshot_burn "$SEGMENT" "${FOLDER_ARGS[@]}"
+else
     if ! type -t mkshot >/dev/null 2>&1; then
         echo "x mkshot function not found -- check .bashrc sourced correctly"
         set +x
         exit 1
     fi
-    mkshot "$SEGMENT" --folder-suffix "$COUNTER"
-else
-    read -rp "Burn thumbnail labels while routing? (y/n, default y): " BURN_CHOICE < /dev/tty
-    BURN_CHOICE="${BURN_CHOICE:-y}"
-
-    if [ "${BURN_CHOICE,,}" = "y" ]; then
-        if ! type -t mkshot_burn >/dev/null 2>&1; then
-            echo "x mkshot_burn function not found -- check .bashrc sourced correctly"
-            set +x
-            exit 1
-        fi
-        mkshot_burn "$SEGMENT"
-    else
-        if ! type -t mkshot >/dev/null 2>&1; then
-            echo "x mkshot function not found -- check .bashrc sourced correctly"
-            set +x
-            exit 1
-        fi
-        mkshot "$SEGMENT"
-    fi
+    mkshot "$SEGMENT" "${FOLDER_ARGS[@]}"
 fi
 
 # =============================================================================
