@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 247,
+      "counter": 252,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,13 +17,11 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 93,
+      "counter": 96,
       "hashtags": [
         "#jumprope",
-        "#skipping",
-        "#fitness",
-        "#cardio",
-        "#workout"
+        "#skip",
+        "#jump"
       ]
     },
     {
@@ -31,7 +29,7 @@
       "name": "piano",
       "short_desc": "piano playing",
       "full_desc": "piano",
-      "counter": 8,
+      "counter": 9,
       "hashtags": [
         "#piano",
         "#music",
@@ -43,7 +41,7 @@
       "name": "m",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 144,
+      "counter": 147,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -113,7 +111,7 @@
       "name": "minecraft",
       "short_desc": "minecraft builds",
       "full_desc": "minecraft",
-      "counter": 2,
+      "counter": 5,
       "hashtags": [
         "#minecraft",
         "#gaming",
@@ -239,7 +237,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 626,
+      "counter": 629,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -359,7 +357,7 @@
       "name": "integral",
       "short_desc": "practice solving integrals at integral.com",
       "full_desc": "integral practice post college and learning techniques",
-      "counter": 35,
+      "counter": 36,
       "hashtags": [
         "#integral",
         "#math",
@@ -411,6 +409,19 @@
         "#hold",
         "#hang",
         "#forearm"
+      ]
+    },
+    {
+      "id": 35,
+      "name": "liftminecraft",
+      "short_desc": "lifting videos with minecraft context",
+      "full_desc": "lifting and editing with minecraft backgrounds, sounds, and context",
+      "counter": 3,
+      "hashtags": [
+        "#minecraft",
+        "#lift",
+        "#exercise",
+        "#create"
       ]
     }
   ]

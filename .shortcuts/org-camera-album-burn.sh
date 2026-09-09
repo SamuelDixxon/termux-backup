@@ -29,6 +29,10 @@ SHARED_STORAGE_ROOT="$HOME/storage/shared"
 SOURCE_PATH="$SHARED_STORAGE_ROOT/DCIM/Camera"
 DATA_FILE="$HOME/.shortcuts/.hidden/segments_data.json"
 DUR=3
+# Overridable via environment since this script takes no CLI args (it's
+# typically launched from a Termux widget, not a terminal): run as
+# `TIMEOUT_SECS=900 bash org-camera-album-burn.sh` for longer clips.
+TIMEOUT_SECS="${TIMEOUT_SECS:-600}"
 
 BURN_THUMB_SCRIPT="$(dirname "$0")/burn_thumb.sh"
 if [ -f "$BURN_THUMB_SCRIPT" ]; then
@@ -75,6 +79,18 @@ if [ -z "$COUNTER" ]; then
   exit 1
 fi
 
+# Copy hashtags to clipboard, same as segment_manager's hashtags-only
+# option -- but inline, no dependency on calling segment_manager.py.
+# Reads straight from segments_data.json (must have valid JSON hashtags
+# array for this segment).
+HASHTAGS=$(jq -r --arg name "$SEGMENT_NAME" '.segments[] | select(.name == $name) | .hashtags | join(" ")' "$DATA_FILE")
+if [ -n "$HASHTAGS" ]; then
+    echo -n "$HASHTAGS" | termux-clipboard-set
+    echo "Copied hashtags to clipboard: $HASHTAGS"
+else
+    echo "! No hashtags found for '$SEGMENT_NAME' -- clipboard untouched"
+fi
+
 # 1. Define the full path for the segment directory inside shared storage.
 TARGET_PATH="$SHARED_STORAGE_ROOT/$SEGMENT_NAME"
 echo "Attempting to create directory at: $TARGET_PATH"
@@ -106,6 +122,16 @@ termux-media-scan -r "$SOURCE_PATH"
 LABEL_PREFIX="$(echo "${SEGMENT_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${SEGMENT_NAME:1}"
 PROCESSED=0
 
+# THE ACCUMULATION FIX: this loop rescans the whole TARGET_PATH folder
+# every run (needed, since new files can be added between runs). Without
+# relocating successfully-burned originals afterward, every re-run would
+# rediscover EVERY original ever moved into this folder -- not just new
+# ones -- since ! -iname '*_labeled.*' only excludes a file from matching
+# itself, it does nothing to stop the file's own unlabeled ORIGINAL from
+# being re-matched indefinitely. That's what caused "can only run once or
+# things get overwritten": every re-run re-burned every old clip too,
+# re-incrementing the counter and overwriting each _labeled output with a
+# new (wrong) label number, every single time.
 while IFS= read -r -d '' f; do
     COUNTER=$((COUNTER + 1))
     LABEL="${LABEL_PREFIX} ${COUNTER}"
@@ -114,13 +140,16 @@ while IFS= read -r -d '' f; do
     output="${TARGET_PATH}/${base}_labeled.${ext}"
 
     echo "[$LABEL] $(basename "$f")"
-    if _burn_thumb_core "$f" "$output" "$LABEL" "$DUR"; then
+    if _burn_thumb_core "$f" "$output" "$LABEL" "$DUR" "$TIMEOUT_SECS"; then
         termux-media-scan "$output"
         PROCESSED=$((PROCESSED + 1))
+        mkdir -p "$TARGET_PATH/.burned_originals"
+        mv "$f" "$TARGET_PATH/.burned_originals/" 2>/dev/null
+        
     else
         echo "burn failed on $(basename "$f") -- skipping this one, counter rolled back, continuing"
         COUNTER=$((COUNTER - 1))
-    fi
+    fi 
 done < <(find "$TARGET_PATH" -maxdepth 1 -type f ! -name '.*' ! -iname '*_labeled.*' \( -iname '*.mp4' -o -iname '*.mov' -o -iname '*.3gp' -o -iname '*.webm' -o -iname '*.mkv' \) -print0 | sort -z)
 
 # Update segments_data.json counter in place -- write to temp then mv,
