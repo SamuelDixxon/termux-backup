@@ -49,6 +49,23 @@ applied to consumer Android hardware instead of a DUT:
 
 ---
 
+## Active Work
+
+What I'm building and measuring right now, in the open:
+
+- **hwbench2 -- a hardware encode benchmark run like a real experiment.**
+  The original `hwbench` showed MediaCodec results were worth questioning;
+  the sequel is a formal DOE: 3 handsets × H.264/HEVC × software/hardware
+  encode, 5 trials + 10 sustained thermal runs per cell (180 runs), with
+  controls for battery state, thermals, and background activity.
+  Scripts and experiment plan are drafted; on-device validation is next.
+  ([docs/hwbench.md](docs/hwbench.md) covers the original harness.)
+- **Deliberate practice, published.** Weekly build blocks turn phone time
+  into terminal-emulator craft: one experiment, one write-up, one
+  résumé-ready artifact at a time. This README refactor was the first.
+
+---
+
 ## Docs
 
 | Doc | Answers |
