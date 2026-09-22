@@ -58,7 +58,8 @@ What I'm building and measuring right now, in the open:
   the sequel is a formal DOE: 3 handsets × H.264/HEVC × software/hardware
   encode, 5 trials + 10 sustained thermal runs per cell (180 runs), with
   controls for battery state, thermals, and background activity.
-  Scripts and experiment plan are drafted; on-device validation is next.
+  Scripts and experiment plan live in [hwbench2/](hwbench2/) — drafted,
+  on-device validation is next.
   ([docs/hwbench.md](docs/hwbench.md) covers the original harness.)
 - **Deliberate practice, published.** Weekly build blocks turn phone time
   into terminal-emulator craft: one experiment, one write-up, one
@@ -74,6 +75,7 @@ What I'm building and measuring right now, in the open:
 | [docs/pipeline.md](docs/pipeline.md) | What are the 5 stages, and what's the session-first v4 proposal? |
 | [docs/components.md](docs/components.md) | How does each component work? (deep dives) |
 | [docs/hwbench.md](docs/hwbench.md) | Is MediaCodec actually reliable? (benchmark harness) |
+| [hwbench2/README.md](hwbench2/README.md) | What's the 3-SoC encode experiment? (design + scripts) |
 | [docs/testing.md](docs/testing.md) | How is this tested? (stage aliases, `regress`) |
 | [docs/debugging.md](docs/debugging.md) | What broke, and what did it teach? |
 | [docs/proposals.md](docs/proposals.md) | What's next? (voice control, efficiency ideas) |
