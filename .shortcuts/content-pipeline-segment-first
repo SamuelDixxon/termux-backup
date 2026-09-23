@@ -16,22 +16,60 @@
 # STEPS:
 #   1. segment_manager.py    -- pick/search a segment, copy hashtags,
 #                                writes session.json (segment, counter, mode)
-#   2. Route DCIM/Camera using that segment name, no re-prompt:
-#        y (default) -> mkshot_burn <segment>  (move + label + counter update)
-#        n           -> mkshot <segment>       (move only, no burn)
+#   2. Route DCIM/Camera -> $FOLDER (=$SEGMENT, or =$SEGMENT+$NUMBER):
+#        y/n -> append the session number? (auto from session.json counter)
+#        burn y/n asked separately (default n for series segments, y otherwise)
+#        y (burn) -> mkshot_burn <segment>, then relocate newly-routed
+#                    files into $FOLDER
+#        n (burn)  -> mkshot <folder>      (move only, no burn)
 #   3. batch-backup   -- same y/c/n mode choice as the original pipeline
+#                        (numbered folders resolve via its Tier-2
+#                        "<segment><digits>" match -- no change needed)
 #   4. backup-all     -- rsync + git push
 #   5. transfer-export -- SD card or Raspberry Pi
 #
-# ASSUMPTION FLAGGED:
-#   I don't have your actual content-pipeline script's source -- only the
-#   documented step behavior from README.md (batch-backup's y/c/n modes,
-#   backup-all, transfer-export). This orchestrator calls those by path
-#   with their documented flags. Built directly against real source for
-#   the two things that changed (segment_manager.py, and mkshot/mkshot_burn
-#   in .bashrc) -- if batch-backup/backup-all/transfer-export's actual CLI
-#   contracts differ from what's documented, share those scripts and I'll
-#   correct the calls below, not guess further.
+# STEP 2 CONTRACT (fixed 2026-09-23):
+#   INPUT:  one yes/no prompt -- "append the session number?" The number
+#           comes from session.json's counter automatically (segment_manager
+#           writes it); you never type it. Manual entry is only a fallback
+#           when no counter exists.
+#   OUTPUT: FOLDER is computed once here and is the single source of truth
+#           downstream -- routing creates it, batch-backup finds it via its
+#           Tier-2 "<segment><digits>" folder match, and the zip is named
+#           after it.
+#
+#   ROOT CAUSE of the old bug (found by reading mkshot/mkshot_burn's real
+#   source in .bashrc, not by guessing): --folder-suffix was never a real
+#   flag. mkshot() takes $1 as the folder name and ignores every argument
+#   after it; mkshot_burn() swallows unknown flags via its `*)` case. The
+#   suffix was silently dropped on the floor, so the folder always came out
+#   as the bare segment name. The orchestrator now owns the final name
+#   instead of asking downstream to apply a flag it doesn't understand:
+#   mkshot receives the computed name as $1 directly, and for the burn path
+#   -- where mkshot_burn MUST receive the bare $SEGMENT as $1 because it
+#   looks up the live counter and label identity by segment name in
+#   segments_data.json (passing "m155" would fail that lookup) -- the files
+#   this run routed are relocated into the numbered folder afterwards.
+#
+# TRACE / OBSERVABILITY:
+#   Every run appends to ~/.shortcuts/.hidden/trace/segment-first_<ts>.log:
+#   the full `set -x` execution trace (directed via BASH_XTRACEFD, so the
+#   terminal stays clean), a timestamped DECISION log of every naming
+#   choice, and the complete stdout of all steps. When a folder comes out
+#   wrong, start here:
+#       grep -n "DECISION" <trace>   # the naming decisions, in order
+#       tail -60 <trace>             # what happened at the end
+#   Only the newest 20 traces are kept.
+#
+# VERIFIED against real source (2026-09-23, no longer "assumption flagged"):
+#   - mkshot / mkshot_burn in .bashrc (arg handling, counter lookup by $1)
+#   - batch-backup's resolve_folders Tier-2 `^<segment>[0-9]+$` match picks up
+#     numbered folders, and zip names derive from folder names -- so the
+#     backup side needs no change to honor numbering.
+#   - backup-all rsyncs ~/.shortcuts/ only -- no folder-name dependency.
+#   - segment_manager.py writes session.json with a "counter" key.
+#   Still from README docs only: transfer-export's CLI contract. If its
+#   actual flags differ, share the script and the call below gets corrected.
 #
 # HARDENED against a real stdin-sharing gotcha: python3's stdin reads are
 # block-buffered when stdin is a non-tty (a pipe), and can consume MORE
@@ -41,7 +79,9 @@
 # typed, nothing to over-buffer), but it's a real risk if this script is
 # ever invoked non-interactively (a widget, `expect`, automation). Fixed
 # by explicitly pointing segment_manager's stdin at /dev/tty instead of
-# letting it inherit this script's own (possibly piped) stdin.
+# letting it inherit this script's own (possibly piped) stdin. The
+# mkshot/mkshot_burn calls below get the same treatment for their own
+# move-confirm prompts.
 #
 # RENAME YOUR EXISTING PIPELINE (on-device -- I don't have that file to
 # move myself):
@@ -57,12 +97,34 @@
 #   "source .bashrc OR true -- prevents set -e silent exit").
 # =============================================================================
 
-set -x
-
 if [ -z "$HOME" ]; then
     export HOME="/data/data/com.termux/files/home"
 fi
 export PATH="/data/data/com.termux/files/usr/bin:$PATH"
+
+# ---------------------------------------------------------------------------
+# Trace / observability setup -- before set -x so the whole run is captured.
+# See the TRACE header note above for how to read the log.
+# ---------------------------------------------------------------------------
+TRACE_DIR="$HOME/.shortcuts/.hidden/trace"
+mkdir -p "$TRACE_DIR" 2>/dev/null
+TRACE_LOG="$TRACE_DIR/segment-first_$(date +%Y%m%d_%H%M%S).log"
+# Bound the trace dir: newest 20 survive.
+ls -t "$TRACE_DIR"/segment-first_*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
+exec 19>>"$TRACE_LOG"                    # fd 19 = trace file
+export BASH_XTRACEFD=19                  # `set -x` output goes here, not the terminal
+export PS4='+ [${BASH_SOURCE##*/}:${LINENO}] '
+exec > >(tee -a "$TRACE_LOG") 2>&1       # all stdout/stderr -> console AND trace
+log() { echo "[$(date +%H:%M:%S)] $*"; } # timestamped decision/info lines
+# list_dir_names <dir> : sorted basenames, one per line; silent empty if missing
+list_dir_names() {
+    [ -d "$1" ] || return 0
+    find "$1" -maxdepth 1 -mindepth 1 -printf '%f\n' 2>/dev/null | sort
+}
+
+set -x
+log "=== content-pipeline-segment-first starting ==="
+log "Trace log: $TRACE_LOG"
 
 # mkshot / mkshot_burn live in .bashrc, not standalone scripts.
 source "$HOME/.bashrc" 2>/dev/null || true
@@ -77,8 +139,8 @@ DATA_FILE="$HOME/.shortcuts/.hidden/segments_data.json"
 echo ""
 echo "=== Step 1: segment_manager -- pick segment, copy hashtags ==="
 if [ ! -f "$MANAGER" ]; then
-    echo "x segment_manager.py not found: $MANAGER"
-    set +x
+    log "x segment_manager.py not found: $MANAGER"
+    log "Trace: $TRACE_LOG"
     exit 1
 fi
 
@@ -92,9 +154,9 @@ else
 fi
 
 if [ ! -f "$SESSION_FILE" ]; then
-    echo "x session.json not found after segment_manager -- did you pick a segment"
-    echo "  and exit normally (option 1/2/7, not Ctrl+C or 'q' without picking)?"
-    set +x
+    log "x session.json not found after segment_manager -- did you pick a segment"
+    log "  and exit normally (option 1/2/7, not Ctrl+C or 'q' without picking)?"
+    log "Trace: $TRACE_LOG"
     exit 1
 fi
 
@@ -107,18 +169,21 @@ except Exception:
 " 2>/dev/null)
 
 if [ -z "$SEGMENT" ]; then
-    echo "x Could not read a segment name from session.json"
-    set +x
+    log "x Could not read a segment name from session.json"
+    log "Trace: $TRACE_LOG"
     exit 1
 fi
 
-echo "Segment for this session: $SEGMENT"
+log "Segment for this session: $SEGMENT"
 
 # =============================================================================
-# STEP 2: route DCIM/Camera -> $SEGMENT, no re-prompt for the name
+# STEP 2: route DCIM/Camera -> $FOLDER, no re-prompt for the name
+# (See the STEP 2 CONTRACT in the header for the input/output design.)
 # =============================================================================
 echo ""
-echo "=== Step 2: route DCIM/Camera -> $SEGMENT ==="
+echo "=== Step 2: route DCIM/Camera -> segment (+ optional number) ==="
+
+SHARED="$HOME/storage/shared"
 
 SERIES_MODE=$(python3 -c "
 import json
@@ -130,48 +195,103 @@ except Exception:
     print('false')
 " 2>/dev/null)
 
-# series_mode only supplies DEFAULTS for the two prompts below -- it no
-# longer hard-branches and skips asking. Folder-numbering and burn-or-not
-# are independent choices every time (e.g. you might want a numbered m140
-# folder AND auto-burn on a given day, or a plain unnumbered folder for a
-# non-series segment) -- always asked, never silently decided for you.
-DEFAULT_SUFFIX=""
-DEFAULT_BURN="y"
-if [ "$SERIES_MODE" = "true" ]; then
-    DEFAULT_SUFFIX=$(python3 -c "
+# series_mode only supplies DEFAULTS for the prompts below -- it never
+# hard-branches or skips asking. Numbering and burn-or-not are independent
+# choices every run (e.g. a numbered m155 folder WITH auto-burn, or a plain
+# unnumbered folder for a non-series segment) -- always asked, never
+# silently decided for you.
+COUNTER=$(python3 -c "
 import json
 try:
     print(json.load(open('$SESSION_FILE')).get('counter', ''))
 except Exception:
     print('')
 " 2>/dev/null)
-    DEFAULT_BURN="n"
+log "series_mode=$SERIES_MODE session_counter='${COUNTER:-<none>}'"
+
+# --- INPUT: do we want the number appended? (y/n -- the number itself is automatic) ---
+NUMBER=""
+if [ -n "$COUNTER" ]; then
+    if [ "$SERIES_MODE" = "true" ]; then DEFAULT_APPEND="y"; else DEFAULT_APPEND="n"; fi
+    read -rp "Append session number to the folder name? (${SEGMENT} -> ${SEGMENT}${COUNTER}) (y/n, default ${DEFAULT_APPEND}): " APPEND < /dev/tty
+    APPEND="${APPEND:-$DEFAULT_APPEND}"
+    if [ "${APPEND,,}" = "y" ]; then NUMBER="$COUNTER"; fi
+    log "DECISION append_number='${APPEND}' -> NUMBER='${NUMBER:-<none>}'"
+else
+    log "! no counter in session.json -- numbering falls back to manual entry"
+    read -rp "Append a number to the folder name? (y/n, default n): " APPEND < /dev/tty
+    APPEND="${APPEND:-n}"
+    if [ "${APPEND,,}" = "y" ]; then
+        read -rp "Number to append (e.g. 155 for ${SEGMENT}155): " NUMBER < /dev/tty
+    fi
+    log "DECISION append_number='${APPEND}' (manual fallback) -> NUMBER='${NUMBER:-<none>}'"
 fi
 
-read -rp "Append a number to the folder name? (e.g. 140 for ${SEGMENT}140, default: ${DEFAULT_SUFFIX:-none}): " FOLDER_SUFFIX < /dev/tty
-FOLDER_SUFFIX="${FOLDER_SUFFIX:-$DEFAULT_SUFFIX}"
+# --- OUTPUT: FOLDER is the single source of truth from here on ---
+if [ -n "$NUMBER" ]; then FOLDER="${SEGMENT}${NUMBER}"; else FOLDER="$SEGMENT"; fi
+log "DECISION FOLDER='$FOLDER' (routing target + backup folder + zip name basis)"
 
+if [ "$SERIES_MODE" = "true" ]; then DEFAULT_BURN="n"; else DEFAULT_BURN="y"; fi
 read -rp "Burn thumbnail labels while routing? (y/n, default ${DEFAULT_BURN}): " BURN_CHOICE < /dev/tty
 BURN_CHOICE="${BURN_CHOICE:-$DEFAULT_BURN}"
+log "DECISION burn='${BURN_CHOICE}'"
 
-FOLDER_ARGS=()
-[ -n "$FOLDER_SUFFIX" ] && FOLDER_ARGS=(--folder-suffix "$FOLDER_SUFFIX")
-
+# --- route ---
 if [ "${BURN_CHOICE,,}" = "y" ]; then
     if ! type -t mkshot_burn >/dev/null 2>&1; then
-        echo "x mkshot_burn function not found -- check .bashrc sourced correctly"
-        set +x
+        log "x mkshot_burn function not found -- check .bashrc sourced correctly"
+        log "Trace: $TRACE_LOG"
         exit 1
     fi
-    mkshot_burn "$SEGMENT" "${FOLDER_ARGS[@]}"
+    # mkshot_burn MUST receive the bare segment: it looks up the live
+    # counter and label identity by segment name in segments_data.json and
+    # hardcodes its dest dir to $SHARED/<that name>. The orchestrator
+    # relocates what this run routed into the numbered folder afterwards.
+    SEG_DIR="$SHARED/$SEGMENT"
+    BEFORE_LIST=$(list_dir_names "$SEG_DIR")
+    log "calling: mkshot_burn '$SEGMENT' (dest=$SEG_DIR)"
+    mkshot_burn "$SEGMENT" < /dev/tty
+    if [ "$FOLDER" != "$SEGMENT" ]; then
+        AFTER_LIST=$(list_dir_names "$SEG_DIR")
+        # Delta = files present after minus files present before = what this
+        # run routed. Pre-existing files stay; re-runs merge into the
+        # numbered folder if it already exists.
+        NEW_LIST=$(comm -13 <(printf '%s\n' "$BEFORE_LIST") <(printf '%s\n' "$AFTER_LIST"))
+        NEW_DIR="$SHARED/$FOLDER"
+        if [ -n "$NEW_LIST" ]; then
+            mkdir -p "$NEW_DIR"
+            moved_n=0
+            while IFS= read -r f; do
+                [ -n "$f" ] || continue
+                if mv "$SEG_DIR/$f" "$NEW_DIR/$f" 2>/dev/null; then
+                    moved_n=$((moved_n + 1))
+                else
+                    log "! failed to relocate '$f' -> $FOLDER/"
+                fi
+            done <<< "$NEW_LIST"
+            rmdir "$SEG_DIR" 2>/dev/null  # tidy up only if now empty
+            termux-media-scan -r "$SEG_DIR" 2>/dev/null
+            termux-media-scan -r "$NEW_DIR" 2>/dev/null
+            log "DECISION relocated $moved_n item(s): '$SEGMENT/' -> '$FOLDER/'"
+        else
+            log "DECISION mkshot_burn routed nothing new -- no relocation (did you answer 'n' at its move prompt?)"
+        fi
+    fi
 else
     if ! type -t mkshot >/dev/null 2>&1; then
-        echo "x mkshot function not found -- check .bashrc sourced correctly"
-        set +x
+        log "x mkshot function not found -- check .bashrc sourced correctly"
+        log "Trace: $TRACE_LOG"
         exit 1
     fi
-    mkshot "$SEGMENT" "${FOLDER_ARGS[@]}"
+    # mkshot takes the folder name as $1 and does no segment lookup --
+    # pass the final computed name directly. (This is the old bug's other
+    # half: the --folder-suffix flag it used to receive doesn't exist.)
+    log "calling: mkshot '$FOLDER'"
+    mkshot "$FOLDER" < /dev/tty
 fi
+
+log "DECISION step 2 complete: folder='$SHARED/$FOLDER'"
+log "note: batch-backup resolves '$FOLDER' via its Tier-2 '^${SEGMENT}[0-9]+\$' folder match; zip names derive from the folder"
 
 # =============================================================================
 # STEP 3: batch-backup -- same y/c/n mode choice as the original pipeline
@@ -180,6 +300,7 @@ echo ""
 echo "=== Step 3: batch-backup ==="
 read -rp "Backup mode -- y=hot (default) / c=custom / n=single folder: " BACKUP_MODE < /dev/tty
 BACKUP_MODE="${BACKUP_MODE:-y}"
+log "DECISION backup_mode='${BACKUP_MODE}'"
 
 case "${BACKUP_MODE,,}" in
     c)
@@ -192,7 +313,7 @@ case "${BACKUP_MODE,,}" in
         if [ -f "$HOME/.shortcuts/backup-folder" ]; then
             bash "$HOME/.shortcuts/backup-folder"
         else
-            echo "! backup-folder not found, falling back to batch-backup interactive"
+            log "! backup-folder not found, falling back to batch-backup interactive"
             bash "$HOME/.shortcuts/batch-backup"
         fi
         ;;
@@ -216,5 +337,5 @@ echo "=== Step 5: transfer-export ==="
 bash "$HOME/.shortcuts/transfer-export"
 
 echo ""
-echo "OK Pipeline complete: $SEGMENT"
-set +x
+log "OK Pipeline complete: segment='$SEGMENT' folder='$FOLDER'"
+log "Trace: $TRACE_LOG"
