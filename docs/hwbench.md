@@ -51,7 +51,7 @@ Snapdragon 8 Gen 2, Tensor G4) × h264/hevc × software/hardware paths, with
 thermal and power telemetry (skin temp, CPU freq, battery per run), sustained
 heat-soak blocks, and a proper DOE.
 
-- DOE + week plan: `hwbench2-doe-and-week-plan.md` (goal workspace)
+- DOE + week plan: `docs/experiments/hwbench2-doe-and-week-plan.md`
 - Scripts: `hwbench2.sh`, `hwbench_plot.py`
 - Reusable DOE skeleton: `doe-template.md`
 

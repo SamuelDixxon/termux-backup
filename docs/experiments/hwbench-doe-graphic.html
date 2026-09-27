@@ -1,0 +1,1039 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <link rel="icon" href="data:," />
+  <title>hwbench → hwbench2: DOE explained</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --paper: #f4f6f3;
+      --surface: #ffffff;
+      --surface-2: #e9eeea;
+      --ink: #14211f;
+      --muted: #53635f;
+      --rule: #bbc7c2;
+      --rule-strong: #80918b;
+      --teal: #087f75;
+      --teal-deep: #075f59;
+      --teal-soft: #d9efeb;
+      --orange: #d45b23;
+      --orange-soft: #f9e2d5;
+      --yellow: #a56b00;
+      --yellow-soft: #f7e8bd;
+      --red: #a73d35;
+      --red-soft: #f6dfdc;
+      --shadow: 0 12px 28px rgba(24, 46, 41, .08);
+      --grid: rgba(26, 61, 54, .055);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #111816;
+        --surface: #18221f;
+        --surface-2: #202e2a;
+        --ink: #edf4f0;
+        --muted: #aebdb7;
+        --rule: #3b4c46;
+        --rule-strong: #657871;
+        --teal: #55c8ba;
+        --teal-deep: #8bddd3;
+        --teal-soft: #193d37;
+        --orange: #f28a52;
+        --orange-soft: #472b20;
+        --yellow: #e0b654;
+        --yellow-soft: #40351d;
+        --red: #ef8c81;
+        --red-soft: #432725;
+        --shadow: 0 14px 34px rgba(0, 0, 0, .24);
+        --grid: rgba(185, 221, 211, .045);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 0;
+      background-color: var(--paper);
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 28px 28px;
+      color: var(--ink);
+      font-family: "Public Sans", sans-serif;
+      line-height: 1.5;
+    }
+    button, a { font: inherit; }
+    button { color: inherit; }
+    a { color: var(--teal-deep); text-underline-offset: 3px; }
+    :focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
+
+    .wrap { width: min(1180px, calc(100% - 40px)); margin-inline: auto; }
+    .mast {
+      padding: clamp(44px, 7vw, 92px) 0 48px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .mast-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(280px, .55fr);
+      gap: clamp(36px, 7vw, 88px);
+      align-items: end;
+    }
+    .kicker {
+      margin: 0 0 12px;
+      font: 600 13px/1.3 "IBM Plex Mono", monospace;
+      color: var(--orange);
+    }
+    h1 {
+      margin: 0;
+      max-width: 800px;
+      font-size: clamp(38px, 6vw, 74px);
+      line-height: .99;
+      letter-spacing: -.045em;
+      font-weight: 800;
+    }
+    .lede {
+      margin: 24px 0 0;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: clamp(17px, 2vw, 21px);
+      line-height: 1.55;
+    }
+    .one-line {
+      padding: 18px 0 2px 22px;
+      border-left: 4px solid var(--teal);
+    }
+    .one-line strong { display: block; font-size: 15px; margin-bottom: 5px; }
+    .one-line p { margin: 0; color: var(--muted); }
+
+    .jump {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--rule);
+      font: 500 13px/1.4 "IBM Plex Mono", monospace;
+    }
+    .jump a { color: var(--muted); text-decoration: none; }
+    .jump a:hover { color: var(--teal); }
+
+    section { padding: clamp(58px, 8vw, 104px) 0; border-bottom: 1px solid var(--rule); }
+    .section-head {
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr);
+      gap: 26px;
+      margin-bottom: 34px;
+      align-items: start;
+    }
+    .section-no {
+      font: 600 13px/1.3 "IBM Plex Mono", monospace;
+      color: var(--orange);
+    }
+    h2 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 50px);
+      line-height: 1.05;
+      letter-spacing: -.035em;
+    }
+    .section-intro { margin: 13px 0 0; max-width: 780px; color: var(--muted); font-size: 17px; }
+    h3 { margin: 0; font-size: 20px; line-height: 1.25; }
+
+    /* Evolution graphic */
+    .evolution {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 96px minmax(0, 1fr);
+      align-items: stretch;
+    }
+    .era {
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      box-shadow: var(--shadow);
+      padding: clamp(22px, 4vw, 38px);
+    }
+    .era.v1 { border-top: 5px solid var(--rule-strong); }
+    .era.v2 { border-top: 5px solid var(--teal); }
+    .era-tag {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 26px;
+      font-family: "IBM Plex Mono", monospace;
+    }
+    .era-tag strong { font-size: 17px; }
+    .era-tag span { color: var(--muted); font-size: 12px; }
+    .question {
+      margin: 0 0 26px;
+      font-size: 22px;
+      line-height: 1.3;
+      letter-spacing: -.02em;
+      font-weight: 700;
+    }
+    .flow { display: grid; gap: 8px; }
+    .flow-node {
+      position: relative;
+      padding: 14px 16px;
+      border: 1px solid var(--rule);
+      background: var(--paper);
+      font-size: 14px;
+    }
+    .flow-node + .flow-node::before {
+      content: "↓";
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface);
+      color: var(--teal);
+      padding: 0 6px;
+      font: 600 16px "IBM Plex Mono", monospace;
+    }
+    .flow-node code { display: block; margin-top: 3px; color: var(--muted); }
+    .bridge { display: grid; place-items: center; position: relative; }
+    .bridge::before { content: ""; width: 100%; height: 1px; background: var(--rule-strong); }
+    .bridge-label {
+      position: absolute;
+      padding: 8px 6px;
+      background: var(--paper);
+      color: var(--teal-deep);
+      text-align: center;
+      font: 600 11px/1.35 "IBM Plex Mono", monospace;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+    }
+    .retained {
+      margin-top: 30px;
+      padding: 18px 20px;
+      background: var(--teal-soft);
+      border-left: 4px solid var(--teal);
+      font-size: 14px;
+    }
+    .retained strong { color: var(--teal-deep); }
+
+    .changelog {
+      margin-top: 34px;
+      border-top: 1px solid var(--rule-strong);
+    }
+    .change-row {
+      display: grid;
+      grid-template-columns: 130px 220px minmax(0, 1fr);
+      gap: 22px;
+      padding: 17px 0;
+      border-bottom: 1px solid var(--rule);
+      align-items: start;
+    }
+    .status {
+      width: fit-content;
+      padding: 4px 7px;
+      font: 600 11px/1.2 "IBM Plex Mono", monospace;
+      border-radius: 3px;
+    }
+    .status.keep { color: var(--teal-deep); background: var(--teal-soft); }
+    .status.add { color: var(--orange); background: var(--orange-soft); }
+    .status.defer { color: var(--yellow); background: var(--yellow-soft); }
+    .change-row strong { font-size: 15px; }
+    .change-row p { margin: 0; color: var(--muted); font-size: 14px; }
+
+    /* DOE calculator */
+    .mode-switch {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .mode-btn {
+      appearance: none;
+      border: 1px solid var(--rule-strong);
+      background: var(--surface);
+      padding: 10px 14px;
+      cursor: pointer;
+      border-radius: 4px;
+      font: 600 13px/1.2 "IBM Plex Mono", monospace;
+    }
+    .mode-btn[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+    .doe-board {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(290px, .62fr);
+      gap: 22px;
+      align-items: stretch;
+    }
+    .factor-panel, .count-panel { background: var(--surface); border: 1px solid var(--rule); }
+    .factor-panel { padding: clamp(22px, 4vw, 34px); }
+    .factor-grid { display: grid; gap: 16px; }
+    .factor {
+      display: grid;
+      grid-template-columns: 145px minmax(0, 1fr);
+      gap: 16px;
+      align-items: center;
+    }
+    .factor-label { font: 600 12px/1.3 "IBM Plex Mono", monospace; color: var(--muted); }
+    .levels { display: flex; gap: 7px; flex-wrap: wrap; }
+    .level {
+      border: 1px solid var(--rule);
+      background: var(--paper);
+      padding: 7px 9px;
+      font-size: 13px;
+      border-radius: 3px;
+    }
+    .level.intentional { border-color: var(--teal); color: var(--teal-deep); background: var(--teal-soft); }
+    .factor-explain {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px dashed var(--rule-strong);
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .factor-explain strong { color: var(--ink); }
+    .count-panel { display: flex; flex-direction: column; }
+    .equation { padding: 30px; flex: 1; display: grid; align-content: center; }
+    .math-line {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      font: 600 clamp(21px, 3vw, 32px)/1.2 "IBM Plex Mono", monospace;
+    }
+    .math-line span:not(.multiply):not(.equals) {
+      min-width: 42px;
+      text-align: center;
+      padding: 7px 9px;
+      background: var(--surface-2);
+      border-radius: 4px;
+    }
+    .multiply, .equals { color: var(--muted); }
+    .run-total {
+      margin-top: 22px;
+      font-size: clamp(42px, 6vw, 72px);
+      line-height: 1;
+      letter-spacing: -.05em;
+      font-weight: 800;
+      color: var(--teal-deep);
+    }
+    .run-total small { display: block; margin-top: 8px; color: var(--muted); font: 500 13px/1.4 "IBM Plex Mono", monospace; letter-spacing: 0; }
+    .mode-note { padding: 17px 22px; background: var(--surface-2); color: var(--muted); font-size: 14px; border-top: 1px solid var(--rule); }
+    .mode-note strong { color: var(--ink); }
+
+    .cell-anatomy {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: 190px minmax(0, 1fr);
+      border: 1px solid var(--rule);
+      background: var(--surface);
+    }
+    .cell-title { padding: 24px; background: var(--ink); color: var(--paper); }
+    .cell-title span { display: block; font: 500 11px/1.3 "IBM Plex Mono", monospace; opacity: .7; margin-bottom: 8px; }
+    .cell-tracks { padding: 24px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px; align-items: center; }
+    .track strong { display: block; margin-bottom: 6px; }
+    .track p { margin: 0; color: var(--muted); font-size: 14px; }
+    .track-dots { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 12px; }
+    .dot { width: 16px; height: 16px; background: var(--teal); border-radius: 50%; }
+    .dot.heat { background: var(--orange); }
+    .cell-arrow { font: 600 22px "IBM Plex Mono", monospace; color: var(--rule-strong); }
+
+    /* Uniformity chain */
+    .uniform-rail {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      border: 1px solid var(--rule-strong);
+      background: var(--surface);
+    }
+    .uniform-step { position: relative; padding: 24px 18px 26px; border-right: 1px solid var(--rule); }
+    .uniform-step:last-child { border-right: 0; }
+    .uniform-step::after {
+      content: "→";
+      position: absolute;
+      right: -11px;
+      top: 28px;
+      z-index: 1;
+      color: var(--teal);
+      background: var(--surface);
+      font: 600 17px "IBM Plex Mono", monospace;
+    }
+    .uniform-step:last-child::after { display: none; }
+    .uniform-index { display: block; margin-bottom: 18px; color: var(--orange); font: 600 12px "IBM Plex Mono", monospace; }
+    .uniform-step h3 { font-size: 17px; margin-bottom: 8px; }
+    .uniform-step p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .definition {
+      margin: 28px 0 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      border-top: 1px solid var(--rule-strong);
+      border-bottom: 1px solid var(--rule-strong);
+    }
+    .definition > div { padding: 24px 26px; }
+    .definition > div:first-child { border-right: 1px solid var(--rule); }
+    .definition strong { display: block; margin-bottom: 8px; }
+    .definition p { margin: 0; color: var(--muted); }
+
+    .state-list {
+      margin-top: 34px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--rule);
+      border: 1px solid var(--rule);
+    }
+    .state-item { background: var(--surface); padding: 18px 20px; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; }
+    .state-mark { color: var(--teal); font: 600 15px "IBM Plex Mono", monospace; }
+    .state-item strong { display: block; font-size: 14px; margin-bottom: 3px; }
+    .state-item span { color: var(--muted); font-size: 13px; }
+
+    /* Controls and encode paths */
+    .variable-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr);
+      gap: 22px;
+      align-items: stretch;
+    }
+    .variable-board, .thermal-board, .path-card {
+      background: var(--surface);
+      border: 1px solid var(--rule);
+    }
+    .board-head { padding: 22px 24px; border-bottom: 1px solid var(--rule); }
+    .board-head span { display: block; margin-bottom: 5px; color: var(--orange); font: 600 11px/1.3 "IBM Plex Mono", monospace; }
+    .board-head h3 { font-size: 19px; }
+    .variable-row {
+      display: grid;
+      grid-template-columns: 122px minmax(0, 1fr);
+      gap: 18px;
+      padding: 17px 24px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .variable-row:last-child { border-bottom: 0; }
+    .variable-kind { font: 600 11px/1.35 "IBM Plex Mono", monospace; color: var(--teal-deep); }
+    .variable-copy strong { display: block; margin-bottom: 4px; font-size: 14px; }
+    .variable-copy p { margin: 0; color: var(--muted); font-size: 13px; }
+    .thermal-board { display: flex; flex-direction: column; }
+    .thermal-sequence { display: grid; flex: 1; }
+    .thermal-stage { position: relative; padding: 20px 24px 21px 52px; border-bottom: 1px solid var(--rule); }
+    .thermal-stage:last-child { border-bottom: 0; }
+    .thermal-stage::before {
+      content: attr(data-stage);
+      position: absolute;
+      left: 22px;
+      top: 21px;
+      color: var(--orange);
+      font: 600 12px/1.3 "IBM Plex Mono", monospace;
+    }
+    .thermal-stage strong { display: block; margin-bottom: 5px; font-size: 14px; }
+    .thermal-stage p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .path-section { margin-top: 28px; }
+    .path-heading { display: flex; justify-content: space-between; gap: 24px; align-items: end; margin-bottom: 14px; }
+    .path-heading h3 { font-size: 22px; }
+    .path-heading p { margin: 0; max-width: 650px; color: var(--muted); font-size: 14px; }
+    .path-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+    .path-card { border: 0; padding: clamp(22px, 4vw, 32px); }
+    .path-label { color: var(--orange); font: 600 11px/1.3 "IBM Plex Mono", monospace; }
+    .path-card h3 { margin: 7px 0 8px; font-size: 24px; }
+    .path-card > p { margin: 0; color: var(--muted); font-size: 14px; }
+    .path-flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 9px; align-items: center; margin: 22px 0; }
+    .path-node { min-width: 0; padding: 12px 9px; background: var(--paper); border: 1px solid var(--rule); text-align: center; font-size: 12px; }
+    .path-node strong { display: block; margin-bottom: 3px; color: var(--teal-deep); font: 600 11px/1.3 "IBM Plex Mono", monospace; }
+    .path-arrow { color: var(--teal); font: 600 16px "IBM Plex Mono", monospace; }
+    .path-traits { display: grid; gap: 9px; margin-top: 18px; }
+    .path-trait { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 10px; font-size: 13px; }
+    .path-trait strong { color: var(--ink); }
+    .path-trait span { color: var(--muted); }
+    .comparison-strip {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 18px;
+      margin-top: 1px;
+      padding: 19px 22px;
+      background: var(--teal-soft);
+      border: 1px solid var(--teal);
+    }
+    .comparison-strip strong { color: var(--teal-deep); font: 600 12px/1.4 "IBM Plex Mono", monospace; }
+    .comparison-strip p { margin: 0; font-size: 14px; }
+    .decode-note { margin: 16px 0 0; color: var(--muted); font-size: 13px; }
+    .decode-note strong { color: var(--ink); }
+
+    /* Workflow */
+    .runway { display: grid; gap: 0; border-top: 1px solid var(--rule-strong); }
+    .run-step {
+      display: grid;
+      grid-template-columns: 72px 200px minmax(0, 1fr) minmax(200px, .65fr);
+      gap: 20px;
+      padding: 24px 0;
+      border-bottom: 1px solid var(--rule);
+      align-items: start;
+    }
+    .run-num { font: 600 22px "IBM Plex Mono", monospace; color: var(--teal); }
+    .run-step h3 { font-size: 17px; }
+    .run-copy { color: var(--muted); font-size: 14px; }
+    .run-copy p { margin: 0 0 10px; }
+    .code-line {
+      display: flex;
+      gap: 9px;
+      align-items: center;
+      max-width: 100%;
+    }
+    code, .mono { font-family: "IBM Plex Mono", monospace; }
+    .code-line code {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      background: var(--surface-2);
+      color: var(--ink);
+      padding: 8px 10px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    .copy-btn {
+      flex: 0 0 auto;
+      appearance: none;
+      border: 1px solid var(--rule-strong);
+      background: var(--surface);
+      padding: 7px 9px;
+      border-radius: 3px;
+      cursor: pointer;
+      font: 600 11px "IBM Plex Mono", monospace;
+    }
+    .copy-btn:hover { border-color: var(--teal); color: var(--teal-deep); }
+    .gate { border-left: 3px solid var(--orange); padding-left: 14px; font-size: 13px; }
+    .gate strong { display: block; margin-bottom: 4px; color: var(--orange); font-family: "IBM Plex Mono", monospace; }
+    .gate span { color: var(--muted); }
+
+    /* Meaning */
+    .answer-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+    .answer {
+      min-height: 208px;
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      padding: 22px 18px;
+    }
+    .answer .signal { color: var(--orange); font: 600 12px "IBM Plex Mono", monospace; }
+    .answer h3 { margin: 15px 0 9px; font-size: 19px; }
+    .answer p { margin: 0; color: var(--muted); font-size: 14px; }
+    .answer code { display: block; margin-top: 17px; color: var(--teal-deep); font-size: 12px; overflow-wrap: anywhere; }
+
+    .caveat {
+      margin-top: 34px;
+      padding: 26px;
+      background: var(--yellow-soft);
+      border: 1px solid var(--yellow);
+    }
+    .caveat-head { display: flex; gap: 14px; align-items: baseline; }
+    .caveat-head span { color: var(--yellow); font: 600 12px "IBM Plex Mono", monospace; }
+    .caveat p { margin: 10px 0 0; max-width: 940px; color: var(--ink); }
+    .caveat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 20px; }
+    .caveat-grid div { padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--yellow) 55%, transparent); }
+    .caveat-grid strong { font-size: 14px; }
+    .caveat-grid p { color: var(--muted); font-size: 13px; }
+
+    footer { padding: 34px 0 52px; color: var(--muted); font-size: 13px; }
+    .footer-row { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+
+    @media (max-width: 900px) {
+      .mast-grid, .doe-board, .variable-layout { grid-template-columns: 1fr; }
+      .one-line { max-width: 650px; }
+      .evolution { grid-template-columns: 1fr; gap: 0; }
+      .bridge { min-height: 82px; }
+      .bridge::before { width: 1px; height: 100%; }
+      .bridge-label { writing-mode: horizontal-tb; transform: none; padding: 7px 12px; }
+      .uniform-rail { grid-template-columns: 1fr 1fr; }
+      .uniform-step { border-bottom: 1px solid var(--rule); }
+      .uniform-step:nth-child(2) { border-right: 0; }
+      .uniform-step::after { display: none; }
+      .uniform-step:last-child { grid-column: 1 / -1; }
+      .run-step { grid-template-columns: 54px 160px minmax(0, 1fr); }
+      .gate { grid-column: 3; }
+      .answer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .answer:last-child { grid-column: 1 / -1; min-height: auto; }
+    }
+
+    @media (max-width: 650px) {
+      .wrap { width: min(100% - 28px, 1180px); }
+      .mast { padding-top: 38px; }
+      .section-head { grid-template-columns: 1fr; gap: 8px; }
+      .evolution { margin-inline: -14px; }
+      .era { box-shadow: none; border-left: 0; border-right: 0; }
+      .change-row { grid-template-columns: 84px 1fr; gap: 12px; }
+      .change-row p { grid-column: 2; }
+      .factor { grid-template-columns: 1fr; gap: 7px; }
+      .factor-panel, .count-panel { margin-inline: -14px; border-left: 0; border-right: 0; }
+      .cell-anatomy { grid-template-columns: 1fr; margin-inline: -14px; border-left: 0; border-right: 0; }
+      .cell-tracks { grid-template-columns: 1fr; }
+      .cell-arrow { transform: rotate(90deg); justify-self: center; }
+      .uniform-rail { grid-template-columns: 1fr; margin-inline: -14px; border-left: 0; border-right: 0; }
+      .uniform-step, .uniform-step:nth-child(2) { border-right: 0; }
+      .uniform-step:last-child { grid-column: auto; }
+      .definition { grid-template-columns: 1fr; }
+      .definition > div:first-child { border-right: 0; border-bottom: 1px solid var(--rule); }
+      .state-list { grid-template-columns: 1fr; }
+      .variable-layout { margin-inline: -14px; gap: 14px; }
+      .variable-board, .thermal-board { border-left: 0; border-right: 0; }
+      .variable-row { grid-template-columns: 1fr; gap: 5px; }
+      .path-heading { display: block; }
+      .path-heading p { margin-top: 8px; }
+      .path-grid { grid-template-columns: 1fr; margin-inline: -14px; border-left: 0; border-right: 0; }
+      .path-flow { grid-template-columns: 1fr; }
+      .path-arrow { transform: rotate(90deg); justify-self: center; }
+      .comparison-strip { grid-template-columns: 1fr; gap: 7px; margin-inline: -14px; border-left: 0; border-right: 0; }
+      .run-step { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; }
+      .run-step h3 { align-self: center; }
+      .run-copy, .gate { grid-column: 2; }
+      .answer-grid { grid-template-columns: 1fr; }
+      .answer:last-child { grid-column: auto; }
+      .answer { min-height: auto; }
+      .caveat { margin-inline: -14px; border-left: 0; border-right: 0; }
+      .caveat-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header class="mast">
+    <div class="wrap mast-grid">
+      <div>
+        <p class="kicker">THE BENCHMARK EVOLUTION</p>
+        <h1>From one harness to a controlled 3‑SoC experiment</h1>
+        <p class="lede">hwbench2 does not throw away hwbench. It preserves the reliability harness, then adds experimental structure so three phones can be compared under the same procedure.</p>
+      </div>
+      <aside class="one-line" aria-label="Key idea">
+        <strong>The one-sentence model</strong>
+        <p><b>V1 establishes the measurement path and failure classification.</b> V2 controls what changes, holds the rest steady, and measures heat soak—not just a fast first run.</p>
+      </aside>
+    </div>
+  </header>
+
+  <nav class="wrap jump" aria-label="Page sections">
+    <a href="#evolution">01 / change map</a>
+    <a href="#doe">02 / DOE math</a>
+    <a href="#uniform">03 / uniformity</a>
+    <a href="#controls">04 / controls &amp; variables</a>
+    <a href="#run">05 / run sequence</a>
+    <a href="#meaning">06 / what it tells you</a>
+  </nav>
+
+  <main>
+    <section id="evolution">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="section-no">01 / CHANGE MAP</div>
+          <div>
+            <h2>The core survives. The question gets wider.</h2>
+            <p class="section-intro">The original harness answers “did this path finish, and how long did it take?” The sequel adds factors, controls, telemetry, and sustained load to ask why devices differ.</p>
+          </div>
+        </div>
+
+        <div class="evolution" aria-label="Diagram comparing hwbench and hwbench2">
+          <article class="era v1">
+            <div class="era-tag"><strong>hwbench</strong><span>cross-device-comparable harness</span></div>
+            <p class="question">Does ffmpeg’s MediaCodec path work reliably—and is it faster than software?</p>
+            <div class="flow">
+              <div class="flow-node">Detect available paths<code>sw / hw_encode / hw_decode</code></div>
+              <div class="flow-node">Run N repeated trials</div>
+              <div class="flow-node">Guard every ffmpeg run<code>-nostdin + timeout + non-empty output</code></div>
+              <div class="flow-node">Classify and summarize<code>OK / FAIL / TIMEOUT → CSV → mean + stdev</code></div>
+            </div>
+          </article>
+
+          <div class="bridge" aria-hidden="true"><span class="bridge-label">KEEP CORE<br>ADD DOE</span></div>
+
+          <article class="era v2">
+            <div class="era-tag"><strong>hwbench2</strong><span>blocked experiment</span></div>
+            <p class="question">How do three SoCs differ by codec and encode path under repeatable, sustained load?</p>
+            <div class="flow">
+              <div class="flow-node">Freeze the factors<code>3 devices × 2 codecs × 2 paths × 1080p</code></div>
+              <div class="flow-node">Run two blocks per cell<code>5 trials + 10 sustained</code></div>
+              <div class="flow-node">Capture device state<code>temperature / CPU / battery / fps</code></div>
+              <div class="flow-node">Compare across blocks<code>speed / reliability / heat soak / drain</code></div>
+            </div>
+            <div class="retained"><strong>Still inherited from v1:</strong> capability detection, timeout handling, zero-byte defense, CSV output, repeated trials, mean and stdev.</div>
+          </article>
+        </div>
+
+        <div class="changelog" aria-label="Change log">
+          <div class="change-row">
+            <span class="status keep">RETAINED</span>
+            <strong>Failure-proof run contract</strong>
+            <p>An encode only counts as OK when ffmpeg exits successfully <em>and</em> the output has bytes. Hangs become TIMEOUT instead of blocking the session.</p>
+          </div>
+          <div class="change-row">
+            <span class="status add">EXPANDED</span>
+            <strong>Three-device SoC factor</strong>
+            <p>hwbench already made per-device CSVs comparable. hwbench2 formalizes device as a blocked DOE factor and adds Galaxy S23+ / Snapdragon 8 Gen 2 to Z Flip 7 / Exynos 2500 and Pixel 9a / Tensor G4. Mappings remain drafts until <code>--prep</code> verifies them.</p>
+          </div>
+          <div class="change-row">
+            <span class="status add">ADDED</span>
+            <strong>Heat soak + telemetry</strong>
+            <p>Ten consecutive runs expose performance drift. Start/end temperature, a CPU-frequency snapshot, battery, fps, elapsed time, and output bytes travel with every row.</p>
+          </div>
+          <div class="change-row">
+            <span class="status add">ADDED</span>
+            <strong>Comparability guards</strong>
+            <p>SHA-pinned inputs, randomized cell order, one-device blocks, fixed state checklist, and cooldown to baseline + 2°C between cells.</p>
+          </div>
+          <div class="change-row">
+            <span class="status defer">STRETCH</span>
+            <strong>HW decode + 4K</strong>
+            <p>Useful extra dimensions, intentionally left out of the 180-run main design. Add them only after the core experiment is clean.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="doe">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="section-no">02 / DOE MATH</div>
+          <div>
+            <h2>A DOE is a grid of exact recipes.</h2>
+            <p class="section-intro">A “cell” is one fixed combination of factor levels. Repeating every cell the same way makes the comparison interpretable.</p>
+          </div>
+        </div>
+
+        <div class="mode-switch" role="tablist" aria-label="Experiment scope">
+          <button class="mode-btn" type="button" role="tab" aria-selected="false" data-mode="pilot">Pilot · 16</button>
+          <button class="mode-btn" type="button" role="tab" aria-selected="true" data-mode="main">Main · 180</button>
+          <button class="mode-btn" type="button" role="tab" aria-selected="false" data-mode="reference">Full reference · 540</button>
+        </div>
+
+        <div class="doe-board" aria-live="polite">
+          <div class="factor-panel">
+            <div class="factor-grid" id="factorGrid"></div>
+            <div class="factor-explain" id="factorExplain"></div>
+          </div>
+          <aside class="count-panel">
+            <div class="equation">
+              <div class="math-line" id="mathLine"></div>
+              <div class="run-total" id="runTotal"></div>
+            </div>
+            <div class="mode-note" id="modeNote"></div>
+          </aside>
+        </div>
+
+        <div class="cell-anatomy">
+          <div class="cell-title"><span>EXAMPLE CELL</span>Z Flip 7<br>× H.264<br>× HW encode<br>× 1080p</div>
+          <div class="cell-tracks">
+            <div class="track">
+              <strong>5 trials</strong>
+              <p>Estimate typical fps and spread; every run also contributes to the success rate.</p>
+              <div class="track-dots" aria-label="Five repeated trials">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+              </div>
+            </div>
+            <div class="cell-arrow">→</div>
+            <div class="track">
+              <strong>10 sustained runs</strong>
+              <p>No cooldown inside this block. The accumulating heat is deliberate treatment.</p>
+              <div class="track-dots" aria-label="Ten sustained runs">
+                <span class="dot heat"></span><span class="dot heat"></span><span class="dot heat"></span><span class="dot heat"></span><span class="dot heat"></span><span class="dot heat"></span><span class="dot heat"></span><span class="dot heat"></span><span class="dot heat"></span><span class="dot heat"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="uniform">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="section-no">03 / UNIFORMITY</div>
+          <div>
+            <h2>Uniform the procedure—not the phones.</h2>
+            <p class="section-intro">The SoC is supposed to change. Everything around it should be controlled, logged, randomized, or acknowledged as a limit.</p>
+          </div>
+        </div>
+
+        <div class="uniform-rail" aria-label="Five-part uniformity chain">
+          <article class="uniform-step"><span class="uniform-index">LOCK 01</span><h3>Same bytes</h3><p>Generate input once, copy it, and verify the SHA-256 on every device.</p></article>
+          <article class="uniform-step"><span class="uniform-index">LOCK 02</span><h3>Same state</h3><p>Unplugged, battery above 60%, airplane mode, low fixed brightness, apps closed, five-minute idle.</p></article>
+          <article class="uniform-step"><span class="uniform-index">LOCK 03</span><h3>Same storage</h3><p>Use internal storage only so documented shared-storage/FUSE variance does not move the result.</p></article>
+          <article class="uniform-step"><span class="uniform-index">LOCK 04</span><h3>Same engine</h3><p>One script applies the same timeout, classification, logging, and output checks everywhere.</p></article>
+          <article class="uniform-step"><span class="uniform-index">LOCK 05</span><h3>Same analysis</h3><p>One plotter calculates success rate, mean, stdev, throttling curves, temperature, and drain.</p></article>
+        </div>
+
+        <div class="definition">
+          <div><strong>Controlled factor</strong><p>A condition intentionally held constant: input bytes, resolution, device state, storage path, run logic.</p></div>
+          <div><strong>Experimental factor</strong><p>A condition intentionally changed to measure its effect: device/SoC, codec, or software vs hardware encode path.</p></div>
+        </div>
+
+        <div class="state-list" aria-label="Additional experiment controls">
+          <div class="state-item"><span class="state-mark">↺</span><div><strong>Randomize cell order</strong><span><code>shuf</code> prevents “always ran last” from being confused with a device or codec effect.</span></div></div>
+          <div class="state-item"><span class="state-mark">▣</span><div><strong>Block by device</strong><span>Each handset is one block; the identical prep checklist repeats per block.</span></div></div>
+          <div class="state-item"><span class="state-mark">°C</span><div><strong>Cooldown between cells</strong><span>The script waits for baseline + 2°C, with a 10-minute cap. No cooldown inside sustained blocks.</span></div></div>
+          <div class="state-item"><span class="state-mark">≡</span><div><strong>Keep the audit trail</strong><span>CSV rows include device, SoC, build fingerprint, timestamps, SHA, and randomization seed.</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="controls">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="section-no">04 / CONTROLS &amp; VARIABLES</div>
+          <div>
+            <h2>Control the starting line. Measure what changes.</h2>
+            <p class="section-intro">The phones will never be physically identical. The DOE makes that variation interpretable by standardizing the setup, recording the response, and separating deliberate heat soak from unwanted carryover.</p>
+          </div>
+        </div>
+
+        <div class="variable-layout">
+          <div class="variable-board">
+            <div class="board-head"><span>PHONE-TO-PHONE ACCOUNTING</span><h3>Where each variable goes</h3></div>
+            <div class="variable-row">
+              <div class="variable-kind">ELIGIBILITY CONTROL</div>
+              <div class="variable-copy"><strong>Starting battery and power state</strong><p>Begin above 60% and unplugged. This avoids charging heat and low-charge behavior, but it does not make different batteries equivalent; the starting percentage remains part of each run record.</p></div>
+            </div>
+            <div class="variable-row">
+              <div class="variable-kind">HELD CONSTANT</div>
+              <div class="variable-copy"><strong>Background load</strong><p>Airplane mode on, apps closed, low fixed brightness, and five minutes idle before the first run reduce unrelated CPU, radio, and display work.</p></div>
+            </div>
+            <div class="variable-row">
+              <div class="variable-kind">MEASURED</div>
+              <div class="variable-copy"><strong>Battery response</strong><p>Battery percent is captured at run start and end, then summed across a cell. Report it as a coarse, device-relative response: percentage points are not equal energy across batteries with different capacity or health.</p></div>
+            </div>
+            <div class="variable-row">
+              <div class="variable-kind">MEASURED + TREATED</div>
+              <div class="variable-copy"><strong>Heat</strong><p>Skin temperature is logged before and after every run. Cells start near the same baseline, while the sustained block intentionally accumulates heat to expose throttling.</p></div>
+            </div>
+            <div class="variable-row">
+              <div class="variable-kind">BLOCKED FACTOR</div>
+              <div class="variable-copy"><strong>Phone and SoC</strong><p>Each handset is one experimental block and runs the same recipes. Differences are reported as device-level case-study effects, not generalized to every phone with that SoC.</p></div>
+            </div>
+            <div class="variable-row">
+              <div class="variable-kind">RANDOMIZED</div>
+              <div class="variable-copy"><strong>Residual order effects</strong><p><code>shuf</code> changes cell order and records the seed, so one path is not always advantaged by running first on a cooler phone.</p></div>
+            </div>
+          </div>
+
+          <aside class="thermal-board" aria-label="How heat is controlled and measured">
+            <div class="board-head"><span>HEAT HAS TWO JOBS</span><h3>Noise between cells. Treatment within a cell.</h3></div>
+            <div class="thermal-sequence">
+              <div class="thermal-stage" data-stage="1"><strong>Reset the baseline</strong><p>Before the session: five-minute idle. Between cells: wait until the phone returns to baseline + 2°C, capped at ten minutes.</p></div>
+              <div class="thermal-stage" data-stage="2"><strong>Let the block heat up</strong><p>The ten sustained runs have no internal cooldown. That rising thermal load is deliberate.</p></div>
+              <div class="thermal-stage" data-stage="3"><strong>Observe the response</strong><p>Plot fps and skin temperature by run number. A falling fps curve reveals the throttling knee.</p></div>
+              <div class="thermal-stage" data-stage="4"><strong>Contain the carryover</strong><p>Cooldown before the next randomized cell keeps one cell’s heat from becoming the next cell’s starting advantage or penalty.</p></div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="path-section">
+          <div class="path-heading">
+            <h3>Two encode paths, one workload</h3>
+            <p>Both paths receive the same source bytes and target resolution. What changes is which compute engine performs the compression.</p>
+          </div>
+          <div class="path-grid">
+            <article class="path-card">
+              <span class="path-label">SOFTWARE / CPU ENCODE</span>
+              <h3>General CPU cores do the work</h3>
+              <p>ffmpeg executes the codec as ordinary ARM instructions: <code>libx264</code> for H.264 and <code>libx265</code> for HEVC. Motion search, transforms, quantization, and entropy coding all run in software.</p>
+              <div class="path-flow" aria-label="Software encode data path">
+                <div class="path-node"><strong>INPUT</strong>frames</div><div class="path-arrow">→</div>
+                <div class="path-node"><strong>CPU</strong>x264 / x265</div><div class="path-arrow">→</div>
+                <div class="path-node"><strong>OUTPUT</strong>video file</div>
+              </div>
+              <div class="path-traits">
+                <div class="path-trait"><strong>Strength</strong><span>Portable, mature, and predictable across devices.</span></div>
+                <div class="path-trait"><strong>Cost</strong><span>High general-purpose CPU load can mean lower fps, more heat, and more battery use.</span></div>
+              </div>
+            </article>
+
+            <article class="path-card">
+              <span class="path-label">HARDWARE / MediaCodec</span>
+              <h3>Dedicated video silicon does the work</h3>
+              <p>ffmpeg asks Android’s MediaCodec API to hand encoding to the SoC’s fixed-function video engine instead of calculating the full codec on the CPU.</p>
+              <div class="path-flow" aria-label="Hardware encode data path">
+                <div class="path-node"><strong>INPUT</strong>frames</div><div class="path-arrow">→</div>
+                <div class="path-node"><strong>SOC</strong>video engine</div><div class="path-arrow">→</div>
+                <div class="path-node"><strong>OUTPUT</strong>video file</div>
+              </div>
+              <div class="path-traits">
+                <div class="path-trait"><strong>Promise</strong><span>Higher throughput with less CPU work, heat, and battery drain.</span></div>
+                <div class="path-trait"><strong>Risk</strong><span>MediaCodec support varies: a run can fail, hang, or return success with an empty file.</span></div>
+              </div>
+            </article>
+          </div>
+          <div class="comparison-strip">
+            <strong>WHAT THE DOE TESTS</strong>
+            <p>For each phone and codec, compare <b>fps, completion rate, temperature rise, throttling, and battery drop</b>. The harness requires both a successful exit and a non-empty output, so “fast but unreliable” cannot win silently.</p>
+          </div>
+          <p class="decode-note"><strong>Stretch path:</strong> <code>hw_dec</code> uses hardware decoding before software encoding. It helps isolate the decode side, but it is not part of the 180-run core design. Also, software CRF versus hardware 8 Mbit/s is a configured-path comparison—not an equal-quality efficiency test.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="run">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="section-no">05 / RUN SEQUENCE</div>
+          <div>
+            <h2>Every stage is a gate.</h2>
+            <p class="section-intro">Do not burn 180 runs to discover a bad sensor or mismatched input at the end. Prove the next layer before scaling up.</p>
+          </div>
+        </div>
+
+        <div class="runway">
+          <article class="run-step">
+            <div class="run-num">01</div><h3>Install</h3>
+            <div class="run-copy"><p>Put the benchmark and plotter in <code>~/.shortcuts</code> on all three phones.</p><div class="code-line"><code>chmod +x ~/.shortcuts/hwbench2 ~/.shortcuts/hwbench_plot.py</code><button class="copy-btn" type="button" data-copy="chmod +x ~/.shortcuts/hwbench2 ~/.shortcuts/hwbench_plot.py">COPY</button></div></div>
+            <div class="gate"><strong>GATE</strong><span>Both scripts executable; ffmpeg, jq, timeout, and shuf available.</span></div>
+          </article>
+          <article class="run-step">
+            <div class="run-num">02</div><h3>Preflight</h3>
+            <div class="run-copy"><p>Check device identity, tools, battery, temperature, capabilities, and cached inputs.</p><div class="code-line"><code>hwbench2 &lt;segment&gt; --prep</code><button class="copy-btn" type="button" data-copy="hwbench2 <segment> --prep">COPY</button></div></div>
+            <div class="gate"><strong>GATE</strong><span>SoCs confirmed, device state ready, and input SHAs match on all devices.</span></div>
+          </article>
+          <article class="run-step">
+            <div class="run-num">03</div><h3>Inspect plan</h3>
+            <div class="run-copy"><p>Let capability detection show which cells are runnable and count the work before executing it.</p><div class="code-line"><code>hwbench2 &lt;segment&gt; --plan</code><button class="copy-btn" type="button" data-copy="hwbench2 <segment> --plan">COPY</button></div></div>
+            <div class="gate"><strong>GATE</strong><span>The intended codec/path cells appear and the run count makes sense.</span></div>
+          </article>
+          <article class="run-step">
+            <div class="run-num">04</div><h3>Pilot</h3>
+            <div class="run-copy"><p>Run the 16-run screen on one phone before committing the full set.</p><div class="code-line"><code>hwbench2 &lt;segment&gt; --pilot</code><button class="copy-btn" type="button" data-copy="hwbench2 <segment> --pilot">COPY</button></div></div>
+            <div class="gate"><strong>GATE</strong><span>CSV has fps, temperature, and battery fields; no crashes; plots render.</span></div>
+          </article>
+          <article class="run-step">
+            <div class="run-num">05</div><h3>Main DOE</h3>
+            <div class="run-copy"><p>Run each device as its own block. Rerun failed cells only after understanding the failure.</p><div class="code-line"><code>hwbench2 &lt;segment&gt; --full</code><button class="copy-btn" type="button" data-copy="hwbench2 <segment> --full">COPY</button></div></div>
+            <div class="gate"><strong>DONE WHEN</strong><span>Three device CSVs exist and every main cell has five trial observations.</span></div>
+          </article>
+          <article class="run-step">
+            <div class="run-num">06</div><h3>Analyze</h3>
+            <div class="run-copy"><p>Feed all device CSVs to the same analysis script.</p><div class="code-line"><code>hwbench_plot.py *.csv</code><button class="copy-btn" type="button" data-copy="hwbench_plot.py *.csv">COPY</button></div></div>
+            <div class="gate"><strong>OUTPUT</strong><span>Per-cell summary plus fps, throttling, temperature, and battery charts.</span></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="meaning">
+      <div class="wrap">
+        <div class="section-head">
+          <div class="section-no">06 / INTERPRETATION</div>
+          <div>
+            <h2>Five signals, five questions.</h2>
+            <p class="section-intro">The benchmark does not produce one universal “winner.” It separates throughput, consistency, failure behavior, thermal response, and coarse power response.</p>
+          </div>
+        </div>
+
+        <div class="answer-grid">
+          <article class="answer"><span class="signal">SIGNAL 01</span><h3>Throughput</h3><p>Which codec/path/device cells finish fastest, and how large is hardware’s advantage over software?</p><code>mean fps ± stdev</code></article>
+          <article class="answer"><span class="signal">SIGNAL 02</span><h3>Reliability</h3><p>Does a cell consistently finish, produce an empty file, fail, or hit the timeout?</p><code>OK / FAIL / TIMEOUT + success %</code></article>
+          <article class="answer"><span class="signal">SIGNAL 03</span><h3>Throttling</h3><p>Does fps decay across the ten-run sustained block, and where does the curve bend?</p><code>fps vs sustained run #</code></article>
+          <article class="answer"><span class="signal">SIGNAL 04</span><h3>Thermal response</h3><p>How does end-of-run skin temperature move as each device heat-soaks?</p><code>temperature vs run #</code></article>
+          <article class="answer"><span class="signal">SIGNAL 05</span><h3>Battery response</h3><p>Which cells show more battery drop under the same procedure?</p><code>summed % drop per cell</code></article>
+        </div>
+
+        <aside class="caveat">
+          <div class="caveat-head"><span>INTERPRET WITH CARE</span><h3>Uniform does not mean perfect equivalence.</h3></div>
+          <p>The design is disciplined enough to answer the pre-registered case-study questions, but its limits should travel with every chart.</p>
+          <div class="caveat-grid">
+            <div><strong>One handset per SoC</strong><p>This is a three-device case study, not a population estimate for every Exynos, Snapdragon, or Tensor phone.</p></div>
+            <div><strong>Different encode targets</strong><p>The current script uses CRF for software and 8 Mbit/s for hardware. It compares the configured paths, not equal-quality encoding efficiency.</p></div>
+            <div><strong>Coarse telemetry</strong><p>Battery percentage is low-resolution, and CPU MHz is a cross-core snapshot—not a time-average over the whole encode.</p></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-row">
+      <span>hwbench’s failure modes were stub-verified; hwbench2’s on-device validation and results are still pending.</span>
+      <a href="https://github.com/SamuelDixxon/termux-backup" target="_blank" rel="noopener noreferrer">Open the termux-backup repository ↗</a>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var modes = {
+        pilot: {
+          factors: [
+            ["Device / SoC", ["1 device"]],
+            ["Codec", ["H.264"]],
+            ["Encode path", ["software", "hardware"]],
+            ["Resolution", ["1080p"]],
+            ["Runs per cell", ["3 trials", "5 sustained"]]
+          ],
+          math: [1, 1, 2, 1, 8], total: 16,
+          labels: ["device", "codec", "paths", "resolution", "runs/cell"],
+          explain: "<strong>Purpose:</strong> screen the machinery, not the hypothesis. This validates telemetry, CSV shape, cooldown behavior, and plotting on a small run.",
+          note: "<strong>Proceed only when:</strong> fields populate, the script stays stable, and the pilot CSV plots cleanly."
+        },
+        main: {
+          factors: [
+            ["Device / SoC", ["Z Flip 7 / Exynos", "S23+ / Snapdragon", "Pixel 9a / Tensor"]],
+            ["Codec", ["H.264", "HEVC"]],
+            ["Encode path", ["software", "hardware"]],
+            ["Resolution", ["1080p"]],
+            ["Runs per cell", ["5 trials", "10 sustained"]]
+          ],
+          math: [3, 2, 2, 1, 15], total: 180,
+          labels: ["devices", "codecs", "paths", "resolution", "runs/cell"],
+          explain: "<strong>12 cells × 15 runs each.</strong> Device is blocked; cell order is randomized. The 5-trial block estimates spread, while 10 sustained runs deliberately create heat soak.",
+          note: "<strong>Chosen design:</strong> enough structure to answer the main questions while staying feasible for one experimenter."
+        },
+        reference: {
+          factors: [
+            ["Device / SoC", ["3 devices"]],
+            ["Codec", ["H.264", "HEVC"]],
+            ["Path", ["software", "HW encode", "HW decode"]],
+            ["Resolution", ["1080p", "4K"]],
+            ["Runs per cell", ["5 trials", "10 sustained"]]
+          ],
+          math: [3, 2, 3, 2, 15], total: 540,
+          labels: ["devices", "codecs", "paths", "resolutions", "runs/cell"],
+          explain: "<strong>36 cells × 15 runs each.</strong> This is the full-factorial reference: every level crossed with every other level.",
+          note: "<strong>Rejected for the first campaign:</strong> 540 runs is too large. HW decode and 4K are stretch work after the 180-run core."
+        }
+      };
+
+      var factorGrid = document.getElementById("factorGrid");
+      var factorExplain = document.getElementById("factorExplain");
+      var mathLine = document.getElementById("mathLine");
+      var runTotal = document.getElementById("runTotal");
+      var modeNote = document.getElementById("modeNote");
+      var buttons = document.querySelectorAll(".mode-btn");
+
+      function renderMode(name) {
+        var mode = modes[name];
+        factorGrid.innerHTML = mode.factors.map(function (factor) {
+          return '<div class="factor"><div class="factor-label">' + factor[0] + '</div><div class="levels">' + factor[1].map(function (level) {
+            return '<span class="level intentional">' + level + '</span>';
+          }).join("") + '</div></div>';
+        }).join("");
+        factorExplain.innerHTML = mode.explain;
+        mathLine.innerHTML = mode.math.map(function (n, i) {
+          var token = '<span title="' + mode.labels[i] + '">' + n + '</span>';
+          return i === 0 ? token : '<b class="multiply">×</b>' + token;
+        }).join("") + '<b class="equals">=</b>';
+        runTotal.innerHTML = mode.total + '<small>total runs</small>';
+        modeNote.innerHTML = mode.note;
+        buttons.forEach(function (button) {
+          button.setAttribute("aria-selected", String(button.getAttribute("data-mode") === name));
+        });
+      }
+
+      buttons.forEach(function (button) {
+        button.addEventListener("click", function () { renderMode(button.getAttribute("data-mode")); });
+      });
+
+      document.querySelectorAll(".copy-btn").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var text = button.getAttribute("data-copy");
+          if (!navigator.clipboard) return;
+          navigator.clipboard.writeText(text).then(function () {
+            var old = button.textContent;
+            button.textContent = "COPIED";
+            window.setTimeout(function () { button.textContent = old; }, 1200);
+          });
+        });
+      });
+
+      renderMode("main");
+    }());
+  </script>
+</body>
+</html>
