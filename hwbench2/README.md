@@ -17,6 +17,8 @@ One handset per SoC — this is a case study, not a population comparison.
 - `DOE.md` — the experiment plan: hypotheses, factors, run math,
   controls, risks. Written before the first run.
 - `doe-template.md` — reusable skeleton for future experiments.
+- `../docs/experiments/hwbench2-doe-and-week-plan.md` — the week-by-week run
+  plan: pilot → full runs → analysis, with exit criteria per day.
 
 ## Usage
 
