@@ -1,23 +1,30 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # =============================================================================
-# backup-all  v2
+# backup-all  v4
 # =============================================================================
 # PURPOSE:
 #   Mirror ~/.shortcuts/ and ~/.bashrc into the termux-backup git repo,
-#   then push to GitHub. Logs every run to sync_history.csv.
+#   purge stale burned originals, then push to GitHub.
+#   Logs every run to sync_history_<device>.csv (per-device, so two phones
+#   never fight over the same log file).
 #
 # WHAT IT DOES:
 #   1. rsync ~/.shortcuts/ -> ~/termux-backup/.shortcuts/  (with --delete)
 #   2. cp ~/.bashrc -> ~/termux-backup/.bashrc
-#   3. Append a row to ~/termux-backup/sync_history.csv
-#   4. git add -A && git commit (if changes exist) && git push
+#   3. Purge .burned_originals/ older than 7 days under ~/storage/shared
+#   4. git add -A && git commit (if changes exist)
+#   5. git fetch + rebase onto origin/main (multi-device: another phone may
+#      have pushed since this one last synced -- v2 pushed blindly and died
+#      with "rejected: fetch first"). segments_data.json counter conflicts
+#      auto-merge with max-wins via merge-counters (counters are monotonic,
+#      so no phone ever resets another phone's counters).
+#   6. git push, then append a row to the per-device sync log and push that
 #
-# SYNC LOG (sync_history.csv):
-#   Columns: Timestamp, Device, Action, Files_Changed, Branch
+# SYNC LOG (sync_history_<device>.csv):
+#   Columns: Timestamp,Device,Action,Files_Changed,Branch
 #   Actions:
-#     PUSH_BACKUP   - changes detected, committed and pushed
-#     NO_CHANGES    - nothing changed since last push (still logged)
-#     PUSH_FAILED   - push attempted but failed (network, auth)
+#     PUSH_BACKUP   - pushed (with or without file changes)
+#     PUSH_FAILED   - push attempted but failed (network, auth, rebase conflict)
 #
 # PIPELINE POSITION:
 #   content-pipeline step 3 of 5
@@ -33,6 +40,9 @@ if [ -z "$HOME" ]; then
     export HOME="/data/data/com.termux/files/home"
 fi
 export PATH="/data/data/com.termux/files/usr/bin:$PATH"
+# Never prompt for an editor: backup-all can run headless (Termux Widget),
+# and `git rebase --continue` must accept the prepared message as-is.
+export GIT_EDITOR=true
 
 set -eo pipefail
 
@@ -40,12 +50,24 @@ set -eo pipefail
 SRC_SHORTCUTS="$HOME/.shortcuts/"
 REPO="$HOME/termux-backup"
 DEST_SHORTCUTS="$REPO/.shortcuts/"
-SYNC_LOG="$REPO/sync_history.csv"
 BRANCH="main"
 
 # Device identifier: model name with spaces stripped
 # Examples: SamsungSM-F766U, Pixel9a, SamsungSM-S916U1
 DEVICE=$(getprop ro.product.model 2>/dev/null | tr -d ' ' || echo "unknown")
+[ -z "$DEVICE" ] && DEVICE="unknown"
+# Per-device sync log: two phones appending to one CSV was the #1 source of
+# cross-device rebase conflicts. Each phone now logs to its own file.
+SYNC_LOG="$REPO/sync_history_${DEVICE}.csv"
+
+# Burned-originals purge: the burn entry points (burn_thumb.sh,
+# org-camera-album-burn.sh, mkshot_burn) stash pre-burn originals in hidden
+# <segment>/.burned_originals/ dirs. backup-all never mirrored them (it only
+# syncs ~/.shortcuts), so they accumulated forever. Originals older than
+# BURN_RETENTION_DAYS are deleted -- the labeled copies are what get zipped
+# to Export/, so the originals are redundant insurance past this window.
+BURN_ROOT="$HOME/storage/shared"
+BURN_RETENTION_DAYS=7
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
 # -- Helpers -------------------------------------------------------------------
@@ -53,6 +75,30 @@ log()  { echo "[$(date '+%H:%M:%S')] $*"; }
 ok()   { echo -e "\033[32mv\033[0m $*"; }
 fail() { echo -e "\033[31mx\033[0m $*"; }
 warn() { echo -e "\033[33m!\033[0m $*"; }
+
+# Delete stale pre-burn originals. The burn scripts move originals into
+# hidden .burned_originals/ dirs inside each segment folder; nothing ever
+# cleaned them up. Only files older than BURN_RETENTION_DAYS are removed
+# (insurance window in case a burn needs redoing); emptied dirs are dropped.
+purge_burned_originals() {
+    [ -d "$BURN_ROOT" ] || return 0
+    local total_files=0 total_bytes=0 d f sz human
+    while IFS= read -r -d '' d; do
+        while IFS= read -r -d '' f; do
+            sz=$(stat -c '%s' "$f" 2>/dev/null || echo 0)
+            total_bytes=$((total_bytes + sz))
+            total_files=$((total_files + 1))
+            rm -f "$f"
+        done < <(find "$d" -type f -mtime +"$BURN_RETENTION_DAYS" -print0 2>/dev/null)
+        rmdir "$d" 2>/dev/null || true
+    done < <(find "$BURN_ROOT" -maxdepth 3 -type d -name '.burned_originals' -print0 2>/dev/null)
+    if [ "$total_files" -gt 0 ]; then
+        human=$(numfmt --to=iec "$total_bytes" 2>/dev/null || echo "${total_bytes} bytes")
+        ok "Purged $total_files stale burned original(s), freed ~$human"
+    else
+        log "No stale burned originals to purge"
+    fi
+}
 
 # -- Ensure repo exists --------------------------------------------------------
 if [ ! -d "$REPO/.git" ]; then
@@ -79,13 +125,18 @@ if [ -f "$HOME/.bashrc" ]; then
     ok ".bashrc copied"
 fi
 
-# -- Step 3: Ensure sync_history.csv exists with header -----------------------
+# -- Step 3: Purge stale .burned_originals -------------------------------------
+# Local-only cleanup; runs even if the push below fails.
+log "Purging stale burned originals (older than $BURN_RETENTION_DAYS days)..."
+purge_burned_originals
+
+# -- Step 4: Ensure per-device sync log exists with header ---------------------
 if [ ! -f "$SYNC_LOG" ]; then
     echo "Timestamp,Device,Action,Files_Changed,Branch" > "$SYNC_LOG"
-    log "Created sync_history.csv"
+    log "Created $(basename "$SYNC_LOG")"
 fi
 
-# -- Step 4: Git commit + push -------------------------------------------------
+# -- Step 5: Git commit --------------------------------------------------------
 cd "$REPO"
 git add -A .
 
@@ -93,40 +144,68 @@ git add -A .
 FILES_CHANGED=$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
 
 if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-    # Changes detected -- commit and push
     COMMIT_MSG="Sync from $DEVICE: $(date '+%Y-%m-%d %H:%M')"
     log "Changes detected ($FILES_CHANGED file(s)) -- committing..."
-
     git commit -m "$COMMIT_MSG" --quiet
+else
+    ok "No file changes to commit"
+    FILES_CHANGED=0
+fi
 
-    if git push origin "$BRANCH" --quiet; then
-        ok "Pushed to GitHub ($FILES_CHANGED file(s) changed)"
-        # Log successful push
-        echo "$TIMESTAMP,$DEVICE,PUSH_BACKUP,$FILES_CHANGED,$BRANCH" >> "$SYNC_LOG"
+# -- Step 6: Catch up with upstream, then push --------------------------------
+# Multi-device fix: another phone may have pushed since this device last
+# synced. v2 pushed blindly and died with "rejected: fetch first".
+# Rebase (not merge) keeps history linear and can never silently keep the
+# older side of a conflict the way a merge resolution can. If the rebase
+# stops on segments_data.json, merge-counters auto-resolves with max-wins
+# per segment (counters are monotonic -- higher is always right -- so no
+# phone ever "resets" another phone's counters back). Anything else
+# conflicted aborts cleanly with manual instructions.
+log "Syncing with upstream..."
+git fetch origin "$BRANCH" --quiet || { fail "git fetch failed (network?)"; exit 1; }
 
-        # Commit the updated sync log itself
-        git add "$SYNC_LOG"
-        if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-            git commit -m "Log: sync from $DEVICE" --quiet
-            git push origin "$BRANCH" --quiet
-        fi
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$BRANCH")" ]; then
+    log "Upstream has new commits -- rebasing local work..."
+    rebase_ok=0
+    if git rebase "origin/$BRANCH" --quiet; then
+        rebase_ok=1
     else
-        fail "git push failed"
-        echo "$TIMESTAMP,$DEVICE,PUSH_FAILED,$FILES_CHANGED,$BRANCH" >> "$SYNC_LOG"
+        # Rebase stopped on conflicts -- keep auto-resolving counter-only
+        # conflicts until the rebase finishes or something else blocks it.
+        while bash "$REPO/.shortcuts/merge-counters" --auto; do
+            if [ ! -d "$REPO/.git/rebase-merge" ] && [ ! -d "$REPO/.git/rebase-apply" ]; then
+                rebase_ok=1
+                break
+            fi
+        done
+    fi
+    if [ "$rebase_ok" -eq 1 ]; then
+        ok "Rebased onto latest upstream"
+    else
+        git rebase --abort 2>/dev/null
+        fail "Rebase hit conflicts backup-all can't auto-resolve -- nothing was pushed."
+        echo "  cd $REPO && git pull --rebase   # resolve by hand, then re-run syncup"
+        echo "  (counters alone? bash ~/.shortcuts/merge-counters, then git rebase --continue)"
         exit 1
     fi
 else
-    # Nothing changed -- log it but don't push
-    ok "No changes to push"
-    echo "$TIMESTAMP,$DEVICE,NO_CHANGES,0,$BRANCH" >> "$SYNC_LOG"
+    ok "Already in sync with upstream"
+fi
 
-    # Still push the log entry itself if the CSV changed
-    git add "$SYNC_LOG"
-    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-        git commit -m "Log: no-change sync from $DEVICE" --quiet
-        git push origin "$BRANCH" --quiet
-        ok "Sync log updated on GitHub"
-    fi
+if git push origin "$BRANCH" --quiet; then
+    ok "Pushed to GitHub"
+else
+    fail "git push failed"
+    echo "$TIMESTAMP,$DEVICE,PUSH_FAILED,$FILES_CHANGED,$BRANCH" >> "$SYNC_LOG"
+    exit 1
+fi
+
+# -- Step 7: Log this run and push the log -------------------------------------
+echo "$TIMESTAMP,$DEVICE,PUSH_BACKUP,$FILES_CHANGED,$BRANCH" >> "$SYNC_LOG"
+git add "$SYNC_LOG"
+if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+    git commit -m "Log: sync from $DEVICE" --quiet
+    git push origin "$BRANCH" --quiet && ok "Sync log updated on GitHub"
 fi
 
 log "Done."

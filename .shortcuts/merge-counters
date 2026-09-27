@@ -1,0 +1,107 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# merge-counters
+# =============================================================================
+# PURPOSE:
+#   Resolve a segments_data.json merge/rebase conflict by keeping the HIGHEST
+#   counter per segment. Counters are monotonic (higher == more episodes
+#   burned), so max(local, upstream) is always the right merge -- no phone
+#   ever "resets" another phone's counters back to older values.
+#
+#   backup-all calls this automatically (with --auto) when segments_data.json
+#   is the only conflicted file. Run it by hand when a manual
+#   `git pull --rebase` stops on the counters file:
+#
+#     cd ~/termux-backup
+#     git diff --name-only --diff-filter=U   # confirm ONLY the counters file
+#     bash ~/.shortcuts/merge-counters
+#     git rebase --continue                  # (or: git merge --continue)
+#
+#   If other files are conflicted too, this script refuses -- resolve those
+#   by hand first.
+#
+#   Deliberate limitation: counters can never be LOWERED through a sync
+#   (max always wins). To intentionally reset a counter, do it on all
+#   devices between syncs -- or ask Muse to walk you through it.
+# =============================================================================
+
+if [ -z "$HOME" ]; then
+    export HOME="/data/data/com.termux/files/home"
+fi
+export PATH="/data/data/com.termux/files/usr/bin:$PATH"
+# Never prompt for an editor: `git rebase --continue` must accept the
+# prepared commit message as-is (this also runs headless via backup-all).
+export GIT_EDITOR=true
+
+set -eo pipefail
+
+AUTO=0
+for arg in "$@"; do
+    [ "$arg" = "--auto" ] && AUTO=1
+done
+
+# Work from the repo root no matter where this was launched.
+cd "$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "x not inside a git repo"; exit 1; }
+
+F=".shortcuts/.hidden/segments_data.json"
+
+unmerged=$(git diff --name-only --diff-filter=U)
+if [ "$(printf '%s\n' "$unmerged" | wc -l | tr -d ' ')" -ne 1 ] || [ "$unmerged" != "$F" ]; then
+    echo "x refusing: unmerged files are not exactly $F"
+    [ -n "$unmerged" ] && echo "$unmerged"
+    exit 1
+fi
+
+tmpdir=$(mktemp -d) || exit 1
+trap 'rm -rf "$tmpdir"' EXIT
+# :2: = base side (upstream during a rebase, local HEAD during a merge)
+# :3: = incoming side (local commit during a rebase, upstream during a merge)
+# max() is symmetric, so the labeling doesn't matter.
+git show ":2:$F" > "$tmpdir/base.json"
+git show ":3:$F" > "$tmpdir/incoming.json"
+
+python3 - "$F" "$tmpdir/base.json" "$tmpdir/incoming.json" <<'PYEOF'
+import json, sys
+path, base_p, inc_p = sys.argv[1], sys.argv[2], sys.argv[3]
+base = json.load(open(base_p))
+incoming = json.load(open(inc_p))
+def idx(d):
+    return {s['name']: s for s in d.get('segments', [])}
+b, n = idx(base), idx(incoming)
+merged = []
+for name in list(b) + [k for k in n if k not in b]:
+    sb, sn = b.get(name), n.get(name)
+    if sb and sn:
+        cb, cn = sb.get('counter', 0), sn.get('counter', 0)
+        rec = dict(sb if cb >= cn else sn)  # keep the fresher record's metadata
+        rec['counter'] = max(cb, cn)
+    else:
+        rec = dict(sb or sn)  # segment exists on only one side -- keep it
+    merged.append(rec)
+base['segments'] = merged
+json.dump(base, open(path, 'w'), indent=2)
+print(f"merged {len(merged)} segment(s) -- highest counter kept per segment")
+PYEOF
+
+git add "$F"
+
+if [ "$AUTO" -eq 1 ]; then
+    if git rebase --continue 2>/dev/null; then
+        echo "v rebase continued"
+    elif git diff --quiet HEAD -- 2>/dev/null; then
+        # Resolved tree is identical to the new base: the replayed commit is
+        # fully superseded (e.g. its counter bumps lost the max-merge), so
+        # dropping it loses nothing.
+        if git rebase --skip 2>/dev/null; then
+            echo "v replayed commit fully superseded upstream -- skipped"
+        else
+            echo "x rebase --skip failed"
+            exit 1
+        fi
+    else
+        echo "x rebase --continue failed with unresolved changes remaining"
+        exit 1
+    fi
+else
+    echo "v counters merged and staged -- now run: git rebase --continue   (or: git merge --continue)"
+fi

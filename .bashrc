@@ -61,7 +61,9 @@ z_backup() {
     timestamp=$(date +%Y%m%d-%H%M)
     local zip_path="$export_dir/${folder}_${timestamp}.zip"
     cd "$src" || { echo "x Cannot cd into $src"; return 1; }
-    "$ZIP_BIN" -9 -r "$zip_path" . >/dev/null 2>&1
+    # Exclude .burned_originals/: pre-burn originals are insurance only, the
+    # labeled copies are what get archived. backup-all purges stale ones.
+    "$ZIP_BIN" -9 -r "$zip_path" . -x '*/.burned_originals/*' >/dev/null 2>&1
     local zip_exit=$?
     if [ $zip_exit -eq 0 ]; then
         local zip_size
