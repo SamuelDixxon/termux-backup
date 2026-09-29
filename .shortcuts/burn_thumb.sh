@@ -12,8 +12,10 @@
 #
 # STYLE (per latest direction):
 #   - centered on the frame (both axes)
-#   - larger (fontsize 120, up from 100)
-#   - bold black outline instead of drop shadow
+#   - font size RELATIVE to frame height (1/12 of height) so the label is a
+#     constant fraction of the picture on 720p, 1080p, 4K, ... -- a fixed
+#     pixel size looks different on every resolution (2026-09-29 fix)
+#   - bold black outline instead of drop shadow (outline also height-relative)
 #
 # EDUCATIONAL CONCEPT:
 #   drawtext filter = real-time video compositing.
@@ -48,6 +50,28 @@ _burn_thumb_core() {
         return 1
     fi
 
+    # Standardized label sizing (2026-09-29): probe the frame height and size
+    # the font as a fraction of it, instead of a fixed pixel value. A fixed
+    # fontsize=120 is 1/6 of a 720p frame but 1/18 of a 4K frame, so the label
+    # visibly shrank/grew whenever a clip's resolution differed (e.g. a clip
+    # re-exported from an editor at a different timeline resolution).
+    local FFPROBE
+    FFPROBE=$(command -v ffprobe 2>/dev/null)
+    [ -z "$FFPROBE" ] && FFPROBE="/data/data/com.termux/files/usr/bin/ffprobe"
+    local vid_h
+    vid_h=$("$FFPROBE" -v error -select_streams v:0 \
+        -show_entries stream=height -of csv=p=0 "$input" 2>/dev/null | tr -d '[:space:]')
+    local fontsize=120 borderw=6
+    if [[ "$vid_h" =~ ^[0-9]+$ ]] && [ "$vid_h" -gt 0 ]; then
+        fontsize=$(( vid_h / 12 ))
+        borderw=$(( vid_h / 200 ))
+        [ "$fontsize" -lt 24 ] && fontsize=24   # floor: stay legible on tiny clips
+        [ "$borderw" -lt 2 ] && borderw=2
+        echo "    label sizing: ${vid_h}px tall -> fontsize=${fontsize}, borderw=${borderw}"
+    else
+        echo "    (could not probe frame height -- falling back to fontsize=120, borderw=6)"
+    fi
+
     # Capture ffmpeg's output for the failure tail AND stream it live via tee
     # -- fully silencing it (2>/dev/null or > log alone) means a slow encode
     # and a genuinely hung one look identical: total silence either way.
@@ -63,9 +87,9 @@ _burn_thumb_core() {
         "$TIMEOUT_BIN" "$timeout_secs" "$FFMPEG" -nostdin -i "$input" \
             -vf "drawtext=text='$label':
                  fontfile='$font_path':
-                 fontsize=120:
+                 fontsize=${fontsize}:
                  fontcolor=white:
-                 borderw=6:
+                 borderw=${borderw}:
                  bordercolor=black:
                  x=(w-text_w)/2:
                  y=(h-text_h)/2:
@@ -79,9 +103,9 @@ _burn_thumb_core() {
         "$FFMPEG" -nostdin -i "$input" \
             -vf "drawtext=text='$label':
                  fontfile='$font_path':
-                 fontsize=120:
+                 fontsize=${fontsize}:
                  fontcolor=white:
-                 borderw=6:
+                 borderw=${borderw}:
                  bordercolor=black:
                  x=(w-text_w)/2:
                  y=(h-text_h)/2:
@@ -119,7 +143,7 @@ _burn_thumb_core() {
 burn_thumb() {
     local input="$1"
     shift
-    local label="" dur=3
+    local label="" dur=0.25
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -203,7 +227,7 @@ burn_thumb_segment() {
     local folder="$1"
     shift
     local mode="copy"
-    local dur=3
+    local dur=0.25
     local timeout_secs=600
 
     while [ $# -gt 0 ]; do
