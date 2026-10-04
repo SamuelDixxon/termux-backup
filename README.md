@@ -67,6 +67,22 @@ What I'm building and measuring right now, in the open:
 
 ---
 
+## Cross-device sync
+
+Three phones share one repo, so sync is designed to make conflicts
+structurally impossible rather than resolved after the fact:
+
+- **Rebase before push** — phones fast-forward onto `origin/main`; history
+  stays linear, no merge commits.
+- **One sync log per device** (`sync_history_<device>.csv`) — git detects
+  conflicts at file granularity, so one file per writer means two phones
+  can never write the same bytes. (The old shared `sync_history.csv` was
+  split per-device on 2026-10-04; full history via
+  `cat sync_history_*.csv`.)
+- **Max-wins counter merges** — `segments_data.json` conflicts auto-resolve
+  with the higher episode counter winning; anything else refuses and asks
+  a human.
+
 ## Docs
 
 | Doc | Answers |
