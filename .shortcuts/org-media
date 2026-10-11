@@ -1,0 +1,245 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# org-media — generalized media organizer (extends org-camera-album)
+# =============================================================================
+# SUMMARY: Move photos/videos from Camera, Screenshots, Downloads, Edits...
+# GROUP: media
+#
+# No arguments: behaves EXACTLY like org-camera-album (backwards compatible).
+#   source = DCIM/Camera, prompt for a NEW folder name, move all media,
+#   rescan the gallery. No confirmation dialog, same as the original --
+#   anything calling org-camera-album (or this script with no args) keeps
+#   working unchanged, including non-interactive pipeline use.
+#
+# Extra behavior via flags (any flag beyond the pure default enables the
+# dry-run preview + confirmation step, unless --yes):
+#   --source camera|screenshots|downloads|edits|<path>
+#   --dest <name|path>            (default: prompt for NEW folder, like the original)
+#   --type photos|videos|all      (default: all)
+#   --older-than N                (days; default: no age filter)
+#   --match <pattern>             (filename substring, case-insensitive)
+#   --dated                       (move into <dest>/YYYY-MM-DD/)
+#   --dry-run                     (preview only, move nothing)
+#   --yes                         (skip the confirmation prompt)
+#   --interactive                 (pickers even when flags cover everything)
+#   --help
+#
+# Examples:
+#   org-media                                              # original behavior
+#   org-media --source screenshots --dest screenshots --dated --yes
+#   org-media --source downloads --older-than 7 --dry-run
+#   org-media --source edits --type videos --match final
+#
+# Safety: never overwrites (existing names are skipped and reported), writes
+# a move manifest per run to .hidden/org-media-manifests/ (undo fuel).
+# =============================================================================
+
+SHARED="$HOME/storage/shared"
+HIDDEN="$HOME/.shortcuts/.hidden"
+MANIFEST_DIR="$HIDDEN/org-media-manifests"
+
+usage() {
+    sed -n '2,/^# Safety/p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+}
+
+# --- arg parsing -------------------------------------------------------------
+SOURCE_ARG="" DEST_ARG="" TYPE="all" OLDER_THAN="" MATCH=""
+DATED=0 DRY_RUN=0 YES=0 INTERACTIVE=0 PURE_DEFAULT=1
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --source)     SOURCE_ARG="$2"; PURE_DEFAULT=0; shift 2 ;;
+        --dest)       DEST_ARG="$2";   PURE_DEFAULT=0; shift 2 ;;
+        --type)       TYPE="$2";       PURE_DEFAULT=0; shift 2 ;;
+        --older-than) OLDER_THAN="$2"; PURE_DEFAULT=0; shift 2 ;;
+        --match)      MATCH="$2";      PURE_DEFAULT=0; shift 2 ;;
+        --dated)      DATED=1;         PURE_DEFAULT=0; shift ;;
+        --dry-run)    DRY_RUN=1;       PURE_DEFAULT=0; shift ;;
+        --yes)        YES=1;           PURE_DEFAULT=0; shift ;;
+        --interactive) INTERACTIVE=1;  PURE_DEFAULT=0; shift ;;
+        --help|-h)    usage ;;
+        *) echo "x unknown arg: $1 (see --help)"; exit 1 ;;
+    esac
+done
+
+case "$TYPE" in
+    photos|videos|all) ;;
+    *) echo "x --type must be photos|videos|all"; exit 1 ;;
+esac
+
+[ ! -d "$SHARED" ] && echo "x $SHARED not found -- run termux-setup-storage" && exit 1
+
+# --- source resolution -------------------------------------------------------
+resolve_source() {
+    case "$1" in
+        camera) echo "$SHARED/DCIM/Camera" ;;
+        screenshots)
+            for p in "$SHARED/DCIM/Screenshots" "$SHARED/Pictures/Screenshots"; do
+                [ -d "$p" ] && { echo "$p"; return 0; }
+            done
+            return 1 ;;
+        downloads|download) echo "$SHARED/Download" ;;
+        edits|edit)
+            for p in "$SHARED/Edits" "$SHARED/edits" "$SHARED/DCIM/Edits"; do
+                [ -d "$p" ] && { echo "$p"; return 0; }
+            done
+            return 1 ;;
+        *)
+            [ -d "$1" ] && echo "$1" && return 0
+            [ -d "$SHARED/$1" ] && echo "$SHARED/$1" && return 0
+            return 1 ;;
+    esac
+}
+
+count_media() {  # $1 = dir; prints file count of media types
+    [ -d "$1" ] || { echo 0; return; }
+    find "$1" -maxdepth 1 -type f \( -iname '*.mp4' -o -iname '*.mov' -o -iname '*.3gp' \
+        -o -iname '*.webm' -o -iname '*.mkv' -o -iname '*.jpg' -o -iname '*.jpeg' \
+        -o -iname '*.png' -o -iname '*.heic' -o -iname '*.gif' -o -iname '*.webp' \) | wc -l | tr -d ' '
+}
+
+pick_source_interactive() {
+    local opts="" labels=""
+    for key in camera screenshots downloads edits; do
+        local p
+        p=$(resolve_source "$key" 2>/dev/null) || continue
+        local n
+        n=$(count_media "$p")
+        opts="${opts:+$opts,}$key"
+        labels="${labels:+$labels | }$key: $n files"
+    done
+    opts="${opts:+$opts,}custom"
+    [ "$opts" = "custom" ] && { echo "x no known media sources found (use --source <path>)"; exit 1; }
+    local pick
+    pick=$(termux-dialog radio -v "$opts" -t "Source? ($labels)" | jq -r '.text // ""')
+    if [ "$pick" = "custom" ] || [ -z "$pick" ]; then
+        pick=$(termux-dialog text -t "Source path (absolute, or under shared/)" | jq -r '.text // ""')
+        [ -z "$pick" ] && { echo "No source entered. Exiting."; exit 0; }
+    fi
+    resolve_source "$pick" || { echo "x source not found: $pick"; exit 1; }
+}
+
+if [ -n "$SOURCE_ARG" ]; then
+    SRC_PATH=$(resolve_source "$SOURCE_ARG") || { echo "x source not found: $SOURCE_ARG"; exit 1; }
+elif [ "$INTERACTIVE" -eq 1 ]; then
+    SRC_PATH=$(pick_source_interactive)
+else
+    SRC_PATH="$SHARED/DCIM/Camera"   # original default
+fi
+
+[ -d "$SRC_PATH" ] || { echo "x source dir missing: $SRC_PATH"; exit 1; }
+
+# --- build the file list -----------------------------------------------------
+FIND_ARGS=("$SRC_PATH" -maxdepth 1 -type f)
+
+case "$TYPE" in
+    photos) EXTS="jpg jpeg png heic gif webp" ;;
+    videos) EXTS="mp4 mov 3gp webm mkv" ;;
+    all)    EXTS="jpg jpeg png heic gif webp mp4 mov 3gp webm mkv" ;;
+esac
+NAME_ARGS=()
+for e in $EXTS; do NAME_ARGS+=(-o -iname "*.$e"); done
+FIND_ARGS+=(\( "${NAME_ARGS[@]:1}" \))
+
+[ -n "$OLDER_THAN" ] && FIND_ARGS+=(-mtime +"$OLDER_THAN")
+[ -n "$MATCH" ] && FIND_ARGS+=(-iname "*${MATCH}*")
+
+mapfile -d '' FILES < <(find "${FIND_ARGS[@]}" -print0 2>/dev/null | sort -z)
+COUNT=${#FILES[@]}
+
+if [ "$COUNT" -eq 0 ]; then
+    echo "! no matching files in $SRC_PATH"
+    exit 0
+fi
+
+TOTAL_BYTES=$(du -cb "${FILES[@]}" 2>/dev/null | tail -n1 | cut -f1)
+HUMAN_SIZE=$(numfmt --to=iec-i "$TOTAL_BYTES" 2>/dev/null || echo "${TOTAL_BYTES}B")
+
+# --- destination -------------------------------------------------------------
+pick_dest_interactive() {
+    local opts=""
+    for d in "$SHARED"/*/; do
+        [ -d "$d" ] || continue
+        local base
+        base=$(basename "$d")
+        case "$base" in
+            DCIM|Download|Android|Export|.*) continue ;;
+        esac
+        opts="${opts:+$opts,}$base"
+    done
+    opts="${opts:+$opts,}New folder..."    local pick
+    pick=$(termux-dialog radio -v "$opts" -t "Destination folder?" | jq -r '.text // ""')
+    [ -z "$pick" ] && { echo "No destination chosen. Exiting."; exit 0; }
+    if [ "$pick" = "New folder..." ]; then
+        pick=$(termux-dialog text -t "Enter NEW folder name" | jq -r '.text // ""')
+        [ -z "$pick" ] && { echo "No folder name entered. Exiting."; exit 0; }
+    fi
+    echo "$pick"
+}
+
+if [ -n "$DEST_ARG" ]; then
+    DEST_NAME="$DEST_ARG"
+elif [ "$INTERACTIVE" -eq 1 ]; then
+    DEST_NAME=$(pick_dest_interactive)
+else
+    # original behavior: prompt for a NEW folder name
+    DEST_NAME=$(termux-dialog text -t "Enter NEW folder name to create in shared storage (e.g., 'Camera_Backup')" | jq -r '.text // ""')
+    [ -z "$DEST_NAME" ] && { echo "No folder name entered. Exiting gracefully."; exit 0; }
+fi
+
+case "$DEST_NAME" in
+    /*) DEST_PATH="$DEST_NAME" ;;
+    *)  DEST_PATH="$SHARED/$DEST_NAME" ;;
+esac
+[ "$DATED" -eq 1 ] && DEST_PATH="$DEST_PATH/$(date +%Y-%m-%d)"
+
+# --- preview + confirm -------------------------------------------------------
+echo "--------------------------------------------------------"
+echo "Source:      $SRC_PATH"
+echo "Destination: $DEST_PATH"
+echo "Files:       $COUNT ($HUMAN_SIZE)"
+echo "Filters:     type=$TYPE${OLDER_THAN:+, older-than=${OLDER_THAN}d}${MATCH:+, match='$MATCH'}"
+echo "Sample:"
+for f in "${FILES[@]:0:8}"; do echo "  $(basename "$f")"; done
+[ "$COUNT" -gt 8 ] && echo "  ... and $((COUNT - 8)) more"
+echo "--------------------------------------------------------"
+
+if [ "$DRY_RUN" -eq 1 ]; then
+    echo "DRY RUN -- nothing moved."
+    exit 0
+fi
+
+if [ "$PURE_DEFAULT" -eq 0 ] && [ "$YES" -eq 0 ]; then
+    ans=$(termux-dialog confirm -t "Move $COUNT files ($HUMAN_SIZE)?" -i "$SRC_PATH -> $DEST_PATH" | jq -r '.text // "no"')
+    if [ "$ans" != "yes" ]; then
+        echo "Cancelled. Nothing moved."
+        exit 0
+    fi
+fi
+
+# --- move --------------------------------------------------------------------
+mkdir -p "$DEST_PATH" "$MANIFEST_DIR" || { echo "x cannot create $DEST_PATH"; exit 1; }
+MANIFEST="$MANIFEST_DIR/org-media-$(date +%Y%m%d-%H%M%S).log"
+
+moved=0; skipped=0
+for f in "${FILES[@]}"; do
+    base=$(basename "$f")
+    if [ -e "$DEST_PATH/$base" ]; then
+        skipped=$((skipped + 1))
+        continue
+    fi
+    if mv "$f" "$DEST_PATH/"; then
+        printf '%s\t%s\n' "$f" "$DEST_PATH/$base" >> "$MANIFEST"
+        moved=$((moved + 1))
+    fi
+done
+
+termux-media-scan -r "$DEST_PATH" 2>/dev/null
+termux-media-scan -r "$SRC_PATH" 2>/dev/null
+
+echo "--------------------------------------------------------"
+echo "OK moved $moved file(s) -> $DEST_PATH"
+[ "$skipped" -gt 0 ] && echo "! skipped $skipped (name already exists in destination)"
+echo "Manifest: $MANIFEST"
+echo "--------------------------------------------------------"
