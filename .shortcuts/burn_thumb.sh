@@ -18,6 +18,10 @@
 #     constant fraction of the picture on 720p, 1080p, 4K, ... -- a fixed
 #     pixel size looks different on every resolution (2026-09-29 fix)
 #   - bold black outline instead of drop shadow (outline also height-relative)
+#   - label on frames 0-2 only (~0.1s, fps-independent): nearly subliminal;
+#     frame 0 (the thumbnail frame) is always labeled (2026-10-11)
+#   - fast path: re-encode only the head (~1s, veryfast preset), stream-copy
+#     the rest, concat -- a 60s clip costs ~1s of encoding (2026-10-11)
 #
 # EDUCATIONAL CONCEPT:
 #   drawtext filter = real-time video compositing.
@@ -52,14 +56,15 @@ _burn_thumb_core() {
         return 1
     fi
 
+    local FFPROBE
+    FFPROBE=$(command -v ffprobe 2>/dev/null)
+    [ -z "$FFPROBE" ] && FFPROBE="/data/data/com.termux/files/usr/bin/ffprobe"
+
     # Standardized label sizing (2026-09-29): probe the frame height and size
     # the font as a fraction of it, instead of a fixed pixel value. A fixed
     # fontsize=120 is 1/6 of a 720p frame but 1/18 of a 4K frame, so the label
     # visibly shrank/grew whenever a clip's resolution differed (e.g. a clip
     # re-exported from an editor at a different timeline resolution).
-    local FFPROBE
-    FFPROBE=$(command -v ffprobe 2>/dev/null)
-    [ -z "$FFPROBE" ] && FFPROBE="/data/data/com.termux/files/usr/bin/ffprobe"
     local vid_h
     vid_h=$("$FFPROBE" -v error -select_streams v:0 \
         -show_entries stream=height -of csv=p=0 "$input" 2>/dev/null | tr -d '[:space:]')
@@ -74,50 +79,89 @@ _burn_thumb_core() {
         echo "    (could not probe frame height -- falling back to fontsize=120, borderw=6)"
     fi
 
-    # Capture ffmpeg's output for the failure tail AND stream it live via tee
-    # -- fully silencing it (2>/dev/null or > log alone) means a slow encode
-    # and a genuinely hung one look identical: total silence either way.
-    local ffmpeg_log
-    ffmpeg_log=$(mktemp)
+    # Label window (2026-10-11): frames 0-2 only, fps-independent (~0.1s at
+    # 30fps). Nearly subliminal on playback; frame 0 -- the thumbnail frame
+    # -- is always labeled. NOTE: the old --dur / between(t,0,dur) window is
+    # retired; dur stays in the signature so existing callers keep working.
+    local drawtext_vf="drawtext=text='$label':fontfile='$font_path':fontsize=${fontsize}:fontcolor=white:borderw=${borderw}:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2:enable='lte(n,2)'"
 
+    # ffmpeg launcher array: timeout when available (hang protection)
     local TIMEOUT_BIN
     TIMEOUT_BIN=$(command -v timeout 2>/dev/null)
     [ -z "$TIMEOUT_BIN" ] && echo "    (no 'timeout' command -- pkg install coreutils for hang protection; running without one this time)"
+    local FF=("$FFMPEG")
+    [ -n "$TIMEOUT_BIN" ] && FF=("$TIMEOUT_BIN" "$timeout_secs" "$FFMPEG")
 
-    echo "    encoding $(basename "$input")... (timeout ${timeout_secs}s, progress below)"
-    if [ -n "$TIMEOUT_BIN" ]; then
-        "$TIMEOUT_BIN" "$timeout_secs" "$FFMPEG" -nostdin -i "$input" \
-            -vf "drawtext=text='$label':
-                 fontfile='$font_path':
-                 fontsize=${fontsize}:
-                 fontcolor=white:
-                 borderw=${borderw}:
-                 bordercolor=black:
-                 x=(w-text_w)/2:
-                 y=(h-text_h)/2:
-                 enable='between(t,0,$dur)'" \
-            -c:v libx264 -preset fast -crf 22 \
-            -c:a copy \
-            -movflags +faststart \
-            -stats -loglevel error \
-            "$output" -y < /dev/null 2>&1 | tee "$ffmpeg_log"
-    else
-        "$FFMPEG" -nostdin -i "$input" \
-            -vf "drawtext=text='$label':
-                 fontfile='$font_path':
-                 fontsize=${fontsize}:
-                 fontcolor=white:
-                 borderw=${borderw}:
-                 bordercolor=black:
-                 x=(w-text_w)/2:
-                 y=(h-text_h)/2:
-                 enable='between(t,0,$dur)'" \
-            -c:v libx264 -preset fast -crf 22 \
-            -c:a copy \
-            -movflags +faststart \
-            -stats -loglevel error \
-            "$output" -y < /dev/null 2>&1 | tee "$ffmpeg_log"
+    local ffmpeg_log
+    ffmpeg_log=$(mktemp)
+
+    # --- fast path: head-only re-encode (2026-10-11) -------------------------
+    # Re-encode just the head (up to the first keyframe >= 1s) carrying the
+    # label; stream-copy the tail; concat via mpegts. A 60s clip costs ~1s of
+    # encoding instead of 60s. Any failure falls back to the full re-encode.
+    local dur_int kf_time=""
+    dur_int=$("$FFPROBE" -v error -show_entries format=duration \
+        -of csv=p=0 "$input" 2>/dev/null | tr -d '[:space:]')
+    dur_int=${dur_int%%.*}
+    if [[ "$dur_int" =~ ^[0-9]+$ ]] && [ "$dur_int" -ge 2 ]; then
+        while IFS= read -r line; do
+            line=$(printf '%s' "$line" | tr -d '[:space:]')
+            line=${line##*,}
+            [[ "$line" =~ ^[0-9]+(\.[0-9]+)?$ ]] || continue
+            if [ "${line%%.*}" -ge 1 ]; then kf_time="$line"; break; fi
+        done < <("$FFPROBE" -v error -skip_frame nokey -select_streams v:0 \
+            -show_entries frame=pkt_pts_time -of csv=p=0 "$input" 2>/dev/null)
     fi
+
+    if [ -n "$kf_time" ]; then
+        echo "    fast path: encoding head (0-${kf_time}s), stream-copying the rest"
+        local tmpdir head_ts tail_ts ok=1
+        tmpdir=$(mktemp -d) || ok=0
+        head_ts="$tmpdir/head.ts"; tail_ts="$tmpdir/tail.ts"
+        if [ $ok -eq 1 ]; then
+            "${FF[@]}" -nostdin -i "$input" -t "$kf_time" \
+                -vf "$drawtext_vf" \
+                -c:v libx264 -preset veryfast -crf 22 \
+                -c:a aac -ar 48000 -ac 2 \
+                -stats -loglevel error \
+                "$head_ts" -y < /dev/null 2>&1 | tee "$ffmpeg_log"
+            [ "${PIPESTATUS[0]}" -eq 0 ] || ok=0
+        fi
+        if [ $ok -eq 1 ]; then
+            "${FF[@]}" -nostdin -ss "$kf_time" -i "$input" \
+                -c:v copy -c:a aac -ar 48000 -ac 2 \
+                -stats -loglevel error \
+                "$tail_ts" -y < /dev/null 2>&1 | tee "$ffmpeg_log"
+            [ "${PIPESTATUS[0]}" -eq 0 ] || ok=0
+        fi
+        if [ $ok -eq 1 ]; then
+            "${FF[@]}" -nostdin -i "concat:$head_ts|$tail_ts" \
+                -c copy -movflags +faststart \
+                -stats -loglevel error \
+                "$output" -y < /dev/null 2>&1 | tee "$ffmpeg_log"
+            [ "${PIPESTATUS[0]}" -eq 0 ] || ok=0
+        fi
+        rm -rf "$tmpdir"
+        if [ $ok -eq 1 ] && [ -f "$output" ]; then
+            echo "    OK (fast path)"
+            rm -f "$ffmpeg_log"
+            return 0
+        fi
+        echo "    fast path failed -- falling back to full re-encode"
+    fi
+
+    # --- legacy path: full re-encode ------------------------------------------
+    # Short clips (<2s) or probe failures land here. Same nearly-invisible
+    # label window; veryfast preset (upload intermediates -- YouTube
+    # re-encodes anyway, so the quality trade is nearly free).
+    echo "    encoding $(basename "$input")... (timeout ${timeout_secs}s, progress below)"
+    "${FF[@]}" -nostdin -i "$input" \
+        -vf "$drawtext_vf" \
+        -c:v libx264 -preset veryfast -crf 22 \
+        -c:a copy \
+        -movflags +faststart \
+        -stats -loglevel error \
+        "$output" -y < /dev/null 2>&1 | tee "$ffmpeg_log"
     local ffmpeg_exit=${PIPESTATUS[0]}
 
     if [ -f "$output" ]; then

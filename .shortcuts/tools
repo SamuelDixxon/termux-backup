@@ -75,6 +75,6 @@ banner() {
 
 case "${1:-}" in
     --banner) banner ;;
-    --help|-h) sed -n '2,/^# ====\{72,\}$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --help|-h) sed -n '2,/^# The banner diffs/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) full_table ;;
 esac
