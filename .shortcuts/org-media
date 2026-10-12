@@ -38,6 +38,23 @@ SHARED="$HOME/storage/shared"
 HIDDEN="$HOME/.shortcuts/.hidden"
 MANIFEST_DIR="$HIDDEN/org-media-manifests"
 
+
+# --- dialog helpers: announce the popup before blocking on it ---------------
+# Widget runs show the terminal but the dialog is a separate popup; without
+# this notice the script looks stuck "expecting something".
+dlg_text() {    # $1 = title
+    echo "  [waiting on dialog] $1 -- check the popup on your screen"
+    termux-dialog text -t "$1" | jq -r '.text // ""'
+}
+dlg_radio() {   # $1 = comma-separated values, $2 = title
+    echo "  [waiting on dialog] $2 -- check the popup on your screen"
+    termux-dialog radio -v "$1" -t "$2" | jq -r '.text // ""'
+}
+dlg_confirm() { # $1 = title, $2 = hint
+    echo "  [waiting on dialog] $1 -- check the popup on your screen"
+    termux-dialog confirm -t "$1" -i "$2" | jq -r '.text // "no"'
+}
+
 usage() {
     sed -n '2,/^# Safety/p' "$0" | sed 's/^# \{0,1\}//'
     exit 0
@@ -69,6 +86,21 @@ case "$TYPE" in
 esac
 
 [ ! -d "$SHARED" ] && echo "x $SHARED not found -- run termux-setup-storage" && exit 1
+
+# --- preflight: fail fast with a clear message, not a mystery ---------------
+for _cmd in termux-dialog jq; do
+    command -v "$_cmd" >/dev/null 2>&1 || { echo "x missing required command: $_cmd -- run: pkg install termux-api jq"; exit 1; }
+done
+unset _cmd
+
+# --- run logging: widget sessions vanish on exit, the log does not ----------
+RUN_LOG_DIR="$HIDDEN/org-media-runs"
+mkdir -p "$RUN_LOG_DIR" "$MANIFEST_DIR"
+ls -t "$RUN_LOG_DIR"/org-media-*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
+RUN_LOG="$RUN_LOG_DIR/org-media-$(date +%Y%m%d-%H%M%S).log"
+exec > >(tee "$RUN_LOG") 2>&1
+echo "=== org-media run: $(date '+%Y-%m-%d %H:%M:%S') ==="
+echo "    run log: $RUN_LOG"
 
 # --- source resolution -------------------------------------------------------
 resolve_source() {
@@ -112,9 +144,9 @@ pick_source_interactive() {
     opts="${opts:+$opts,}custom"
     [ "$opts" = "custom" ] && { echo "x no known media sources found (use --source <path>)"; exit 1; }
     local pick
-    pick=$(termux-dialog radio -v "$opts" -t "Source? ($labels)" | jq -r '.text // ""')
+    pick=$(dlg_radio "$opts" "Source? ($labels)")
     if [ "$pick" = "custom" ] || [ -z "$pick" ]; then
-        pick=$(termux-dialog text -t "Source path (absolute, or under shared/)" | jq -r '.text // ""')
+        pick=$(dlg_text "Source path (absolute, or under shared/)")
         [ -z "$pick" ] && { echo "No source entered. Exiting."; exit 0; }
     fi
     resolve_source "$pick" || { echo "x source not found: $pick"; exit 1; }
@@ -169,10 +201,10 @@ pick_dest_interactive() {
         opts="${opts:+$opts,}$base"
     done
     opts="${opts:+$opts,}New folder..."    local pick
-    pick=$(termux-dialog radio -v "$opts" -t "Destination folder?" | jq -r '.text // ""')
+    pick=$(dlg_radio "$opts" "Destination folder?")
     [ -z "$pick" ] && { echo "No destination chosen. Exiting."; exit 0; }
     if [ "$pick" = "New folder..." ]; then
-        pick=$(termux-dialog text -t "Enter NEW folder name" | jq -r '.text // ""')
+        pick=$(dlg_text "Enter NEW folder name")
         [ -z "$pick" ] && { echo "No folder name entered. Exiting."; exit 0; }
     fi
     echo "$pick"
@@ -184,7 +216,7 @@ elif [ "$INTERACTIVE" -eq 1 ]; then
     DEST_NAME=$(pick_dest_interactive)
 else
     # original behavior: prompt for a NEW folder name
-    DEST_NAME=$(termux-dialog text -t "Enter NEW folder name to create in shared storage (e.g., 'Camera_Backup')" | jq -r '.text // ""')
+    DEST_NAME=$(dlg_text "Enter NEW folder name to create in shared storage (e.g., 'Camera_Backup')")
     [ -z "$DEST_NAME" ] && { echo "No folder name entered. Exiting gracefully."; exit 0; }
 fi
 
@@ -211,7 +243,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 if [ "$PURE_DEFAULT" -eq 0 ] && [ "$YES" -eq 0 ]; then
-    ans=$(termux-dialog confirm -t "Move $COUNT files ($HUMAN_SIZE)?" -i "$SRC_PATH -> $DEST_PATH" | jq -r '.text // "no"')
+    ans=$(dlg_confirm "Move $COUNT files ($HUMAN_SIZE)?" "$SRC_PATH -> $DEST_PATH")
     if [ "$ans" != "yes" ]; then
         echo "Cancelled. Nothing moved."
         exit 0
