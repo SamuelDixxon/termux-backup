@@ -2,18 +2,19 @@
 # =============================================================================
 # org-media — generalized media organizer (extends org-camera-album)
 # =============================================================================
-# SUMMARY: Move photos/videos from Camera, Screenshots, Downloads, Edits...
+# SUMMARY: Move photos/videos from Camera, Edits, Muse, Screenshots...
 # GROUP: media
 #
-# No arguments: behaves EXACTLY like org-camera-album (backwards compatible).
-#   source = DCIM/Camera, prompt for a NEW folder name, move all media,
-#   rescan the gallery. No confirmation dialog, same as the original --
-#   anything calling org-camera-album (or this script with no args) keeps
-#   working unchanged, including non-interactive pipeline use.
+# No arguments: sweeps the four accumulation points (Camera, Edits, Muse,
+#   Screenshots), prompts for a NEW folder name, moves all media, rescans
+#   the gallery. No confirmation dialog -- the same prompt/move/rescan flow
+#   org-camera-album always had, just with a wider net.
+#   For the strict original (Camera only, e.g. pipelines): --source camera
 #
 # Extra behavior via flags (any flag beyond the pure default enables the
 # dry-run preview + confirmation step, unless --yes):
-#   --source camera|screenshots|downloads|edits|<path>
+#   --source camera|screenshots|downloads|edits|muse|<path>[,...]
+#              (comma-separated = multi-source, e.g. --source camera,edits)
 #   --dest <name|path>            (default: prompt for NEW folder, like the original)
 #   --type photos|videos|all      (default: all)
 #   --older-than N                (days; default: no age filter)
@@ -25,7 +26,9 @@
 #   --help
 #
 # Examples:
-#   org-media                                              # original behavior
+#   org-media                                # sweep Camera+Edits+Muse+Screenshots
+#   org-media --source camera                # strict original (Camera only)
+#   org-media --source camera,edits --dest shoot_may --yes
 #   org-media --source screenshots --dest screenshots --dated --yes
 #   org-media --source downloads --older-than 7 --dry-run
 #   org-media --source edits --type videos --match final
@@ -127,6 +130,11 @@ resolve_source() {
                 [ -d "$p" ] && { echo "$p"; return 0; }
             done
             return 1 ;;
+        muse)
+            for p in "$SHARED/Muse" "$SHARED/DCIM/Muse" "$SHARED/Pictures/Muse"; do
+                [ -d "$p" ] && { echo "$p"; return 0; }
+            done
+            return 1 ;;
         *)
             [ -d "$1" ] && echo "$1" && return 0
             [ -d "$SHARED/$1" ] && echo "$SHARED/$1" && return 0
@@ -141,85 +149,134 @@ count_media() {  # $1 = dir; prints file count of media types
         -o -iname '*.png' -o -iname '*.heic' -o -iname '*.gif' -o -iname '*.webp' \) | wc -l | tr -d ' '
 }
 
-pick_source_interactive() {
-    local opts="" labels=""
-    for key in camera screenshots downloads edits; do
-        local p
-        p=$(resolve_source "$key" 2>/dev/null) || continue
-        local n
-        n=$(count_media "$p")
-        opts="${opts:+$opts,}$key"
-        labels="${labels:+$labels | }$key: $n files"
+pick_sources_checkbox() {
+    # Multi-select source picker. Echoes one source key per line (may be
+    # empty if dismissed). termux-dialog checkbox returns "[a, b]" style.
+    local raw item
+    echo "  [waiting on dialog] Sources? (tap all that apply) -- check the popup on your screen" >&2
+    raw=$(termux-dialog checkbox -v "camera,screenshots,downloads,edits,muse,custom" \
+        -t "Sources? (tap all that apply)" | jq -r '.text // ""')
+    raw=${raw#\[}; raw=${raw%\]}
+    local IFS=','
+    for item in $raw; do
+        item=$(printf '%s' "$item" | sed 's/^ *//;s/ *$//')
+        [ -n "$item" ] && echo "$item"
     done
-    opts="${opts:+$opts,}custom"
-    [ "$opts" = "custom" ] && { echo "x no known media sources found (use --source <path>)"; exit 1; }
-    local pick
-    pick=$(dlg_radio "$opts" "Source? ($labels)")
-    if [ "$pick" = "custom" ] || [ -z "$pick" ]; then
-        pick=$(dlg_text "Source path (absolute, or under shared/)")
-        [ -z "$pick" ] && { echo "No source entered. Exiting."; exit 0; }
-    fi
-    resolve_source "$pick" || { echo "x source not found: $pick"; exit 1; }
 }
+
+choose_sources() {
+    # Checkbox-driven source selection; echoes a comma-separated source spec,
+    # expanding "custom" via a text prompt. May echo empty (dismissed).
+    local keys key out="" p
+    keys=$(pick_sources_checkbox)
+    [ -z "$keys" ] && return 0
+    while IFS= read -r key; do
+        if [ "$key" = "custom" ]; then
+            p=$(dlg_text "Source path (absolute, or under shared/)")
+            [ -n "$p" ] && out="$out,$p"
+        else
+            out="$out,$key"
+        fi
+    done <<< "$keys"
+    echo "${out#,}"
+}
+
+build_source_set() {
+    # $1 = comma-separated source spec, $2 = quiet (1 = suppress warnings).
+    # Populates SRC_KEYS / SRC_PATHS with the sources that resolve.
+    local spec="$1" quiet="${2:-0}" item p
+    SRC_KEYS=(); SRC_PATHS=()
+    local IFS=','
+    for item in $spec; do
+        item=$(printf '%s' "$item" | sed 's/^ *//;s/ *$//')
+        [ -z "$item" ] && continue
+        if p=$(resolve_source "$item" 2>/dev/null); then
+            SRC_KEYS+=("$item"); SRC_PATHS+=("$p")
+        elif [ "$quiet" != "1" ]; then
+            echo "! skipping unknown source: $item" >&2
+        fi
+    done
+}
+
+# The four accumulation points swept by default (no-arg widget flow).
+DEFAULT_SOURCES="camera,edits,muse,screenshots"
 
 SOURCE_EXPLICIT=0
 [ -n "$SOURCE_ARG" ] && SOURCE_EXPLICIT=1
 
 collect_files() {
-    # Build the find command from the active filters; populate FILES/COUNT.
-    # Expects SRC_PATH to be set.
-    FIND_ARGS=("$SRC_PATH" -maxdepth 1 -type f)
-    case "$TYPE" in
-        photos) EXTS="jpg jpeg png heic gif webp" ;;
-        videos) EXTS="mp4 mov 3gp webm mkv" ;;
-        all)    EXTS="jpg jpeg png heic gif webp mp4 mov 3gp webm mkv" ;;
-    esac
-    NAME_ARGS=()
-    for e in $EXTS; do NAME_ARGS+=(-o -iname "*.$e"); done
-    FIND_ARGS+=(\( "${NAME_ARGS[@]:1}" \))
-    [ -n "$OLDER_THAN" ] && FIND_ARGS+=(-mtime +"$OLDER_THAN")
-    [ -n "$MATCH" ] && FIND_ARGS+=(-iname "*${MATCH}*")
-    mapfile -d '' FILES < <(find "${FIND_ARGS[@]}" -print0 2>/dev/null | sort -z)
+    # Gather matching files across ALL of SRC_PATHS. Populates FILES, COUNT,
+    # and per-source SRC_COUNTS (parallel to SRC_KEYS/SRC_PATHS).
+    FILES=(); SRC_COUNTS=()
+    local sp n
+    for sp in "${SRC_PATHS[@]}"; do
+        n=0
+        if [ -d "$sp" ]; then
+            FIND_ARGS=("$sp" -maxdepth 1 -type f)
+            case "$TYPE" in
+                photos) EXTS="jpg jpeg png heic gif webp" ;;
+                videos) EXTS="mp4 mov 3gp webm mkv" ;;
+                all)    EXTS="jpg jpeg png heic gif webp mp4 mov 3gp webm mkv" ;;
+            esac
+            NAME_ARGS=()
+            for e in $EXTS; do NAME_ARGS+=(-o -iname "*.$e"); done
+            FIND_ARGS+=(\( "${NAME_ARGS[@]:1}" \))
+            [ -n "$OLDER_THAN" ] && FIND_ARGS+=(-mtime +"$OLDER_THAN")
+            [ -n "$MATCH" ] && FIND_ARGS+=(-iname "*${MATCH}*")
+            while IFS= read -r -d ''; do
+                FILES+=("$REPLY"); n=$((n+1))
+            done < <(find "${FIND_ARGS[@]}" -print0 2>/dev/null | sort -z)
+        fi
+        SRC_COUNTS+=("$n")
+    done
     COUNT=${#FILES[@]}
 }
 
 show_available_sources() {
     echo "  What's available right now:"
     local key p n
-    for key in camera screenshots downloads edits; do
+    for key in camera edits muse screenshots downloads; do
         p=$(resolve_source "$key" 2>/dev/null) || continue
         n=$(count_media "$p")
         echo "    $key: $n file(s)"
     done
 }
 
-# Foolproof source loop: an empty default source (e.g. Camera already
-# organized) never dead-ends -- show what's available and offer the picker.
-# Explicit --source / --yes runs keep the old exit-0 behavior for pipelines.
+# Foolproof source loop: an empty source set never dead-ends -- show what's
+# available and offer the picker. Explicit --source / --yes runs keep the
+# old exit-0 behavior for pipelines.
 attempt=0
 while true; do
     attempt=$((attempt + 1))
     if [ "$attempt" -eq 1 ]; then
         if [ -n "$SOURCE_ARG" ]; then
-            SRC_PATH=$(resolve_source "$SOURCE_ARG") || { echo "x source not found: $SOURCE_ARG"; exit 1; }
+            build_source_set "$SOURCE_ARG" 0
         elif [ "$INTERACTIVE" -eq 1 ]; then
-            SRC_PATH=$(pick_source_interactive)
+            SPEC=$(choose_sources)
+            [ -z "$SPEC" ] && { echo "No sources selected. Exiting."; exit 0; }
+            build_source_set "$SPEC" 0
         else
-            SRC_PATH="$SHARED/DCIM/Camera"   # original default
+            build_source_set "$DEFAULT_SOURCES" 1   # quiet: optional dirs may not exist
         fi
     else
-        SRC_PATH=$(pick_source_interactive)  # retry: always via picker
+        SPEC=$(choose_sources)   # retry: always via picker
+        [ -z "$SPEC" ] && { echo "No sources selected. Exiting."; exit 0; }
+        build_source_set "$SPEC" 0
     fi
-    [ -d "$SRC_PATH" ] || { echo "x source dir missing: $SRC_PATH"; exit 1; }
+    if [ "${#SRC_PATHS[@]}" -eq 0 ]; then
+        echo "x none of the selected sources exist on this device"
+        [ "$attempt" -ge 3 ] && exit 1
+        continue
+    fi
     collect_files
     [ "$COUNT" -gt 0 ] && break
-    echo "! no matching files in $SRC_PATH"
+    echo "! no matching files across: ${SRC_KEYS[*]}"
     if [ "$SOURCE_EXPLICIT" -eq 1 ] || [ "$YES" -eq 1 ] || [ "$attempt" -ge 3 ]; then
         exit 0
     fi
     if [ "$PURE_DEFAULT" -eq 1 ] || [ "$INTERACTIVE" -eq 1 ]; then
         show_available_sources
-        ans=$(dlg_confirm "Pick a different source?" "The default source came up empty")
+        ans=$(dlg_confirm "Pick different sources?" "The current set came up empty")
         [ "$ans" = "yes" ] || exit 0
     else
         exit 0
@@ -269,7 +326,10 @@ esac
 
 # --- preview + confirm -------------------------------------------------------
 echo "--------------------------------------------------------"
-echo "Source:      $SRC_PATH"
+echo "Sources:"
+for i in "${!SRC_PATHS[@]}"; do
+    echo "    ${SRC_KEYS[$i]}: ${SRC_COUNTS[$i]} file(s)  (${SRC_PATHS[$i]})"
+done
 echo "Destination: $DEST_PATH"
 echo "Files:       $COUNT ($HUMAN_SIZE)"
 echo "Filters:     type=$TYPE${OLDER_THAN:+, older-than=${OLDER_THAN}d}${MATCH:+, match='$MATCH'}"
@@ -284,7 +344,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 if [ "$PURE_DEFAULT" -eq 0 ] && [ "$YES" -eq 0 ]; then
-    ans=$(dlg_confirm "Move $COUNT files ($HUMAN_SIZE)?" "$SRC_PATH -> $DEST_PATH")
+    ans=$(dlg_confirm "Move $COUNT files ($HUMAN_SIZE)?" "${SRC_KEYS[*]} -> $DEST_PATH")
     if [ "$ans" != "yes" ]; then
         echo "Cancelled. Nothing moved."
         exit 0
@@ -294,6 +354,10 @@ fi
 # --- move --------------------------------------------------------------------
 mkdir -p "$DEST_PATH" "$MANIFEST_DIR" || { echo "x cannot create $DEST_PATH"; exit 1; }
 MANIFEST="$MANIFEST_DIR/org-media-$(date +%Y%m%d-%H%M%S).log"
+{
+    echo "# org-media run $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "# sources: ${SRC_KEYS[*]}"
+} > "$MANIFEST"
 
 moved=0; skipped=0
 for f in "${FILES[@]}"; do
@@ -309,7 +373,7 @@ for f in "${FILES[@]}"; do
 done
 
 termux-media-scan -r "$DEST_PATH" 2>/dev/null
-termux-media-scan -r "$SRC_PATH" 2>/dev/null
+for sp in "${SRC_PATHS[@]}"; do termux-media-scan -r "$sp" 2>/dev/null; done
 
 echo "--------------------------------------------------------"
 echo "OK moved $moved file(s) -> $DEST_PATH"

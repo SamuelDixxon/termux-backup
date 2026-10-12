@@ -2,6 +2,7 @@
 
 | Version | Date | Component | Status | Summary |
 |---------|------|-----------|--------|---------|
+| v4.4 | 2026-10 | org-media | new | Multi-source: no-arg default now sweeps the four accumulation points (Camera, Edits, Muse, Screenshots); source picker is a multi-select checkbox dialog; --source accepts comma-separated keys (e.g. --source camera,edits); preview shows per-source counts; manifest records the source set; --source camera restores the strict original for pipelines |
 | v4.3.3 | 2026-10 | org-media | fix | YES-on-empty-source exited the flow: the v4.3.1 '[waiting on dialog]' notice printed to stdout and polluted the captured dialog answer, so it never equaled 'yes'. Notices now go to stderr; confirm parsing also accepts any button-label case and falls back to the dialog button code |
 | v4.3.2 | 2026-10 | org-media | new | Foolproof empty source: an empty default source (e.g. Camera already organized) no longer dead-ends -- shows per-source file counts and offers the source picker (up to 3 tries). Explicit --source / --yes runs keep the old exit-0 behavior for pipelines |
 | v4.3.1 | 2026-10 | org-media | new | Widget hardening: dialogs now announce themselves before blocking ("[waiting on dialog] ... check the popup"), preflight check fails fast with a clear message if termux-dialog/jq are missing, and every run tees to a per-run log in .hidden/org-media-runs/ (newest 20 kept) so widget sessions that vanish on exit leave a trace |
