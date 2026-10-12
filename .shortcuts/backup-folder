@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Pick segment folders via dialog and zip them to Export/
+# GROUP: backup
 
 # 1. Gather folders from shared/ and DCIM/ — preserve DCIM subfolder names
 #    so z_backup can resolve them correctly.

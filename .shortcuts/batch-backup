@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Zip content segment folders into Export/ (4 modes, merge logic)
+# GROUP: backup
 # =============================================================================
 # batch-backup  v3
 # =============================================================================

@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Stitch a segment folder's clips into one sequential reel
+# GROUP: media
 # =============================================================================
 # sandwich -- sequential concatenation
 # =============================================================================

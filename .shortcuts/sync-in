@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Pull the repo, mirror .shortcuts, update .bashrc if newer
+# GROUP: backup
 set -euo pipefail
 
 D="$HOME/termux-backup"

@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Post-shoot chain: org-camera-album -> backup-folder -> manager
+# GROUP: pipeline
 # content-pipeline — run after a shoot
 # Chains: org-camera-album → backup-folder → manager
 # Place in ~/.shortcuts/ alongside the other scripts

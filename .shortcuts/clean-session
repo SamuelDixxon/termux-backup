@@ -1,2 +1,4 @@
 #!/bin/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Kill the Termux session for a fresh start
+# GROUP: utility
 pkill -9 com.termux && exit

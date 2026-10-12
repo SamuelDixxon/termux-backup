@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Session-first pipeline: pick segment, copy hashtags, manage the counter
+# GROUP: pipeline
 # =============================================================================
 # content-pipeline-segment-first
 # =============================================================================

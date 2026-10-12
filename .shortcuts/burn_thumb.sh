@@ -1,3 +1,5 @@
+# SUMMARY: Burn a sequential text label onto a video's first frames (thumbnail labeling)
+# GROUP: media
 # =============================================================================
 # FFMPEG: THUMBNAIL BURNER
 # =============================================================================

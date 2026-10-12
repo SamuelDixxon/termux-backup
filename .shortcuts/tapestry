@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: NxN grid of a segment's clips playing simultaneously
+# GROUP: media
 # =============================================================================
 # tapestry -- grid mode only
 # =============================================================================

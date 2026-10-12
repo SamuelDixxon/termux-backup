@@ -1107,5 +1107,16 @@ alias cpfile='termux-clipboard-set <'
 
 
 # =============================================================================
+# TOOLS BANNER -- what have we built?
+# =============================================================================
+# On login, show the tool count and anything new since the last session.
+# `tools` renders the full grouped inventory; every script self-describes
+# via # SUMMARY: / # GROUP: header lines. Interactive shells only.
+if [[ $- == *i* ]] && [ -x "$HOME/.shortcuts/tools" ]; then
+    "$HOME/.shortcuts/tools" --banner
+fi
+
+
+# =============================================================================
 # END
 # =============================================================================

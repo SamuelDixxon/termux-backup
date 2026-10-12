@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Mirror ~/.shortcuts + ~/.bashrc to the git repo and push to GitHub (rebase-before-push, counter-safe)
+# GROUP: backup
 # =============================================================================
 # backup-all  v4
 # =============================================================================

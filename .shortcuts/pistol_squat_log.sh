@@ -1,4 +1,6 @@
 #!/bin/bash
+# SUMMARY: Log a pistol-squat session, copy the summary to clipboard
+# GROUP: content
 
 if ! command -v termux-clipboard-set &> /dev/null; then
     pkg install termux-api -y

@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Auto-resolve segments_data.json conflicts: highest counter wins per segment
+# GROUP: backup
 # =============================================================================
 # merge-counters
 # =============================================================================

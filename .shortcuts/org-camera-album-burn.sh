@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Move Camera files into a segment folder and burn sequential thumbnails
+# GROUP: media
 # =============================================================================
 # ORG-CAMERA-ALBUM-BURN
 # =============================================================================

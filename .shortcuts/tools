@@ -1,0 +1,80 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# tools — render the tool inventory
+# =============================================================================
+# SUMMARY: List all installed pipeline tools, grouped, with one-line descriptions
+# GROUP: utility
+#
+#   tools            full grouped table (for humans)
+#   tools --banner   quiet login banner for .bashrc: tool count + what's new
+#                    since the last login (new/updated tools only)
+#
+# Convention: every tool script declares its one-liner in its header:
+#   # SUMMARY: what it does in one line
+#   # GROUP: pipeline|media|backup|content|utility
+# The banner diffs against a seen-cache so it only speaks when there's news.
+# =============================================================================
+
+SHORTCUTS="${SHORTCUTS_DIR:-$HOME/.shortcuts}"
+SEEN="$HOME/.shortcuts/.hidden/.tools_seen"
+GROUP_ORDER="pipeline media backup content utility"
+
+scan() {
+    # prints: group|name|mtime|summary  (one line per tool)
+    local f name summary group mtime
+    for f in "$SHORTCUTS"/*; do
+        [ -f "$f" ] || continue
+        name=$(basename "$f")
+        summary=$(grep -m1 '^# SUMMARY:' "$f" 2>/dev/null | sed 's/^# SUMMARY: *//')
+        group=$(grep -m1 '^# GROUP:' "$f" 2>/dev/null | sed 's/^# GROUP: *//' | tr '[:upper:]' '[:lower:]')
+        [ -z "$summary" ] && summary="(no description yet)"
+        [ -z "$group" ] && group="other"
+        mtime=$(stat -c %Y "$f" 2>/dev/null || echo 0)
+        printf '%s|%s|%s|%s\n' "$group" "$name" "$mtime" "$summary"
+    done
+}
+
+full_table() {
+    local total g rows
+    total=$(scan | wc -l | tr -d ' ')
+    printf '\033[1mTools\033[0m (%s in %s)\n\n' "$total" "$SHORTCUTS"
+    for g in $GROUP_ORDER other; do
+        rows=$(scan | awk -F'|' -v g="$g" '$1==g' | sort -t'|' -k2,2)
+        [ -z "$rows" ] && continue
+        printf '\033[1m%s\033[0m\n' "$g"
+        while IFS='|' read -r _ name _ summary; do
+            printf '  %-32s %s\n' "$name" "$summary"
+        done <<< "$rows"
+        echo ""
+    done
+}
+
+banner() {
+    local total news line
+    total=$(scan | wc -l | tr -d ' ')
+    declare -A seen_mtime
+    if [ -f "$SEEN" ]; then
+        while IFS='|' read -r _ name mtime _; do
+            seen_mtime["$name"]="$mtime"
+        done < <(sort -u "$SEEN")
+    fi
+    local updates=""
+    while IFS='|' read -r _ name mtime summary; do
+        if [ -z "${seen_mtime[$name]+x}" ]; then
+            updates="${updates}  + NEW  $name -- $summary\n"
+        elif [ "${seen_mtime[$name]}" != "$mtime" ]; then
+            updates="${updates}  ~ UPD  $name -- $summary\n"
+        fi
+    done < <(scan | sort -u)
+    scan | sort -u > "$SEEN"
+    printf 'Tools: %s installed -- type `tools` to browse\n' "$total"
+    if [ -n "$updates" ]; then
+        printf '%b' "$updates"
+    fi
+}
+
+case "${1:-}" in
+    --banner) banner ;;
+    --help|-h) sed -n '2,/^# ====\{72,\}$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) full_table ;;
+esac

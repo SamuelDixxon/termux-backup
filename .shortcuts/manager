@@ -1,3 +1,5 @@
 #!/bin/bash
+# SUMMARY: Hashtag manager (CRUD) for content segments
+# GROUP: pipeline
 termux-toast "Opening Hashtag Manager (CRUD)"
 python ~/.shortcuts/.hidden/segment_manager.py

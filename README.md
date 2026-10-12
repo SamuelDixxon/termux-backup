@@ -83,6 +83,23 @@ structurally impossible rather than resolved after the fact:
   with the higher episode counter winning; anything else refuses and asks
   a human.
 
+## Tools
+
+Everything lives in `.shortcuts/` (Termux:Widget-ready) and self-describes
+via `# SUMMARY:` / `# GROUP:` header lines. On-device, `tools` renders this
+inventory grouped; on login the shell prints a one-line banner and only
+mentions what's new since your last session.
+
+**Pipeline** — `content-pipeline-segment-first` (session-first: pick segment, copy hashtags, manage counter) · `pipeline` (post-shoot chain: organize → zip → hashtags) · `manager` (hashtag CRUD)
+
+**Media** — `org-camera-album` (move DCIM/Camera into a new folder) · `org-media` (organize Camera/Screenshots/Downloads/Edits with filters + dry-run; no-arg = original behavior) · `org-camera-album-burn.sh` (organize into a segment + burn sequential thumbnails) · `burn_thumb.sh` (burn text labels onto video) · `tapestry` (NxN clip grid) · `sandwich` (stitch clips into one reel) · `video-utils.sh` (shared ffmpeg helpers)
+
+**Backup & sync** — `backup-all` (mirror to git repo: rebase-before-push, counter-safe) · `sync-in` (pull repo, mirror scripts, update .bashrc) · `merge-counters` (auto-resolve counter conflicts, max wins) · `backup-folder` (dialog-driven zip to Export/) · `batch-backup` (zip segment folders, 4 modes) · `transfer-export` (Export/ → SD card or Raspberry Pi)
+
+**Content** — `pistol_squat_log.sh` (log a session, copy summary) · `week-recap` (title + description for a week's bundle)
+
+**Utility** — `tools` (this inventory, live) · `clean-session` (fresh Termux start)
+
 ## Docs
 
 | Doc | Answers |

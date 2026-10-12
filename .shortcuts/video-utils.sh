@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Shared ffmpeg helpers for tapestry/sandwich (library, not run directly)
+# GROUP: media
 # =============================================================================
 # video-utils.sh -- shared helpers for tapestry (grid) and sandwich (concat)
 # =============================================================================

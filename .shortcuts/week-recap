@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Generate title + description for a week's shorts bundled as one upload
+# GROUP: content
 # =============================================================================
 # week-recap
 # =============================================================================

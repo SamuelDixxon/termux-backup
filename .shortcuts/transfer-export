@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Copy Export/ to SD card (USB) or Raspberry Pi (rsync over SSH)
+# GROUP: backup
 # transfer-export — copy ~/storage/shared/Export to an SD card or Raspberry Pi
 #
 # WIRED:   USB-C SD adapter plugged into phone → auto-detects mount point
