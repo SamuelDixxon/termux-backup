@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 269,
+      "counter": 274,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 100,
+      "counter": 103,
       "hashtags": [
         "#jumprope",
         "#skip",
@@ -83,7 +83,7 @@
       "name": "book review",
       "short_desc": "book reviews",
       "full_desc": "book reviews and education",
-      "counter": 23,
+      "counter": 24,
       "hashtags": [
         "#bookreview",
         "#books",
@@ -181,7 +181,7 @@
       "name": "hike",
       "short_desc": "hiking adventures",
       "full_desc": "hiking videos",
-      "counter": 11,
+      "counter": 12,
       "hashtags": [
         "#hiking",
         "#outdoors",
@@ -237,7 +237,7 @@
       "name": "pistol",
       "short_desc": "pistol squats",
       "full_desc": "pistol squats",
-      "counter": 637,
+      "counter": 650,
       "hashtags": [
         "#squats",
         "#pistolsquats",
@@ -251,7 +251,7 @@
       "name": "box",
       "short_desc": "all things related to boxing",
       "full_desc": "boxing and things related to fighting",
-      "counter": 45,
+      "counter": 49,
       "hashtags": [
         "#box",
         "#punch",
@@ -357,7 +357,7 @@
       "name": "integral",
       "short_desc": "practice solving integrals at integral.com",
       "full_desc": "integral practice post college and learning techniques",
-      "counter": 37,
+      "counter": 38,
       "hashtags": [
         "#integral",
         "#math",
@@ -391,19 +391,11 @@
       ]
     },
     {
-      "id": 33,
-      "name": "camera",
-      "short_desc": "dummy for tapestry",
-      "full_desc": "dummy for tapestry",
-      "counter": 0,
-      "hashtags": []
-    },
-    {
       "id": 34,
       "name": "grip",
       "short_desc": "training gri0 ability",
       "full_desc": "type stuffs with grip strength, similar to climb",
-      "counter": 3,
+      "counter": 18,
       "hashtags": [
         "#gripstrength",
         "#hold",
