@@ -42,17 +42,27 @@ MANIFEST_DIR="$HIDDEN/org-media-manifests"
 # --- dialog helpers: announce the popup before blocking on it ---------------
 # Widget runs show the terminal but the dialog is a separate popup; without
 # this notice the script looks stuck "expecting something".
-dlg_text() {    # $1 = title
-    echo "  [waiting on dialog] $1 -- check the popup on your screen"
+dlg_text() {    # $1 = title ; echoes the entered text on stdout
+    echo "  [waiting on dialog] $1 -- check the popup on your screen" >&2
     termux-dialog text -t "$1" | jq -r '.text // ""'
 }
-dlg_radio() {   # $1 = comma-separated values, $2 = title
-    echo "  [waiting on dialog] $2 -- check the popup on your screen"
+dlg_radio() {   # $1 = comma-separated values, $2 = title ; echoes the picked value
+    echo "  [waiting on dialog] $2 -- check the popup on your screen" >&2
     termux-dialog radio -v "$1" -t "$2" | jq -r '.text // ""'
 }
-dlg_confirm() { # $1 = title, $2 = hint
-    echo "  [waiting on dialog] $1 -- check the popup on your screen"
-    termux-dialog confirm -t "$1" -i "$2" | jq -r '.text // "no"'
+dlg_confirm() { # $1 = title, $2 = hint ; echoes exactly "yes" or "no"
+    # NOTE: the notice goes to stderr -- stdout is the captured answer.
+    echo "  [waiting on dialog] $1 -- check the popup on your screen" >&2
+    local out ans code
+    out=$(termux-dialog confirm -t "$1" -i "$2" 2>/dev/null)
+    ans=$(printf '%s' "$out" | jq -r '.text // ""' 2>/dev/null)
+    case "${ans,,}" in
+        yes|y) echo "yes"; return ;;
+        no|n)  echo "no"; return ;;
+    esac
+    # fall back to the button code when .text is missing (-1 = YES, -2 = NO)
+    code=$(printf '%s' "$out" | jq -r '.code // empty' 2>/dev/null)
+    [ "$code" = "-1" ] && echo "yes" || echo "no"
 }
 
 usage() {
