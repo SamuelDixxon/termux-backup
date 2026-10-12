@@ -152,38 +152,69 @@ pick_source_interactive() {
     resolve_source "$pick" || { echo "x source not found: $pick"; exit 1; }
 }
 
-if [ -n "$SOURCE_ARG" ]; then
-    SRC_PATH=$(resolve_source "$SOURCE_ARG") || { echo "x source not found: $SOURCE_ARG"; exit 1; }
-elif [ "$INTERACTIVE" -eq 1 ]; then
-    SRC_PATH=$(pick_source_interactive)
-else
-    SRC_PATH="$SHARED/DCIM/Camera"   # original default
-fi
+SOURCE_EXPLICIT=0
+[ -n "$SOURCE_ARG" ] && SOURCE_EXPLICIT=1
 
-[ -d "$SRC_PATH" ] || { echo "x source dir missing: $SRC_PATH"; exit 1; }
+collect_files() {
+    # Build the find command from the active filters; populate FILES/COUNT.
+    # Expects SRC_PATH to be set.
+    FIND_ARGS=("$SRC_PATH" -maxdepth 1 -type f)
+    case "$TYPE" in
+        photos) EXTS="jpg jpeg png heic gif webp" ;;
+        videos) EXTS="mp4 mov 3gp webm mkv" ;;
+        all)    EXTS="jpg jpeg png heic gif webp mp4 mov 3gp webm mkv" ;;
+    esac
+    NAME_ARGS=()
+    for e in $EXTS; do NAME_ARGS+=(-o -iname "*.$e"); done
+    FIND_ARGS+=(\( "${NAME_ARGS[@]:1}" \))
+    [ -n "$OLDER_THAN" ] && FIND_ARGS+=(-mtime +"$OLDER_THAN")
+    [ -n "$MATCH" ] && FIND_ARGS+=(-iname "*${MATCH}*")
+    mapfile -d '' FILES < <(find "${FIND_ARGS[@]}" -print0 2>/dev/null | sort -z)
+    COUNT=${#FILES[@]}
+}
 
-# --- build the file list -----------------------------------------------------
-FIND_ARGS=("$SRC_PATH" -maxdepth 1 -type f)
+show_available_sources() {
+    echo "  What's available right now:"
+    local key p n
+    for key in camera screenshots downloads edits; do
+        p=$(resolve_source "$key" 2>/dev/null) || continue
+        n=$(count_media "$p")
+        echo "    $key: $n file(s)"
+    done
+}
 
-case "$TYPE" in
-    photos) EXTS="jpg jpeg png heic gif webp" ;;
-    videos) EXTS="mp4 mov 3gp webm mkv" ;;
-    all)    EXTS="jpg jpeg png heic gif webp mp4 mov 3gp webm mkv" ;;
-esac
-NAME_ARGS=()
-for e in $EXTS; do NAME_ARGS+=(-o -iname "*.$e"); done
-FIND_ARGS+=(\( "${NAME_ARGS[@]:1}" \))
-
-[ -n "$OLDER_THAN" ] && FIND_ARGS+=(-mtime +"$OLDER_THAN")
-[ -n "$MATCH" ] && FIND_ARGS+=(-iname "*${MATCH}*")
-
-mapfile -d '' FILES < <(find "${FIND_ARGS[@]}" -print0 2>/dev/null | sort -z)
-COUNT=${#FILES[@]}
-
-if [ "$COUNT" -eq 0 ]; then
+# Foolproof source loop: an empty default source (e.g. Camera already
+# organized) never dead-ends -- show what's available and offer the picker.
+# Explicit --source / --yes runs keep the old exit-0 behavior for pipelines.
+attempt=0
+while true; do
+    attempt=$((attempt + 1))
+    if [ "$attempt" -eq 1 ]; then
+        if [ -n "$SOURCE_ARG" ]; then
+            SRC_PATH=$(resolve_source "$SOURCE_ARG") || { echo "x source not found: $SOURCE_ARG"; exit 1; }
+        elif [ "$INTERACTIVE" -eq 1 ]; then
+            SRC_PATH=$(pick_source_interactive)
+        else
+            SRC_PATH="$SHARED/DCIM/Camera"   # original default
+        fi
+    else
+        SRC_PATH=$(pick_source_interactive)  # retry: always via picker
+    fi
+    [ -d "$SRC_PATH" ] || { echo "x source dir missing: $SRC_PATH"; exit 1; }
+    collect_files
+    [ "$COUNT" -gt 0 ] && break
     echo "! no matching files in $SRC_PATH"
-    exit 0
-fi
+    if [ "$SOURCE_EXPLICIT" -eq 1 ] || [ "$YES" -eq 1 ] || [ "$attempt" -ge 3 ]; then
+        exit 0
+    fi
+    if [ "$PURE_DEFAULT" -eq 1 ] || [ "$INTERACTIVE" -eq 1 ]; then
+        show_available_sources
+        ans=$(dlg_confirm "Pick a different source?" "The default source came up empty")
+        [ "$ans" = "yes" ] || exit 0
+    else
+        exit 0
+    fi
+done
 
 TOTAL_BYTES=$(du -cb "${FILES[@]}" 2>/dev/null | tail -n1 | cut -f1)
 HUMAN_SIZE=$(numfmt --to=iec-i "$TOTAL_BYTES" 2>/dev/null || echo "${TOTAL_BYTES}B")
