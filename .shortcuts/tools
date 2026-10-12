@@ -25,6 +25,9 @@ scan() {
     for f in "$SHORTCUTS"/*; do
         [ -f "$f" ] || continue
         name=$(basename "$f")
+        case "$name" in
+            *.md|.*) continue ;;   # docs and dotfiles aren't tools
+        esac
         summary=$(grep -m1 '^# SUMMARY:' "$f" 2>/dev/null | sed 's/^# SUMMARY: *//')
         group=$(grep -m1 '^# GROUP:' "$f" 2>/dev/null | sed 's/^# GROUP: *//' | tr '[:upper:]' '[:lower:]')
         [ -z "$summary" ] && summary="(no description yet)"

@@ -1107,6 +1107,18 @@ alias cpfile='termux-clipboard-set <'
 
 
 # =============================================================================
+# SHORTCUTS ON PATH -- run the tools as bare commands
+# =============================================================================
+# ~/.shortcuts holds the tool scripts (also launched from the Termux:Widget).
+# On PATH, `tools`, `org-media`, `backup-all`, ... work as plain commands in
+# any shell. Guarded so re-sourcing .bashrc never duplicates the entry.
+case ":$PATH:" in
+    *":$HOME/.shortcuts:"*) ;;
+    *) export PATH="$HOME/.shortcuts:$PATH" ;;
+esac
+
+
+# =============================================================================
 # TOOLS BANNER -- what have we built?
 # =============================================================================
 # On login, show the tool count and anything new since the last session.
