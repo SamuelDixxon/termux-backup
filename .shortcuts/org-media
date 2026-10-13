@@ -126,7 +126,7 @@ resolve_source() {
             return 1 ;;
         downloads|download) echo "$SHARED/Download" ;;
         edits|edit)
-            for p in "$SHARED/Edits" "$SHARED/edits" "$SHARED/DCIM/Edits"; do
+            for p in "$SHARED/Edits" "$SHARED/edits" "$SHARED/DCIM/Edits" "$SHARED/Movies/Edits"; do
                 [ -d "$p" ] && { echo "$p"; return 0; }
             done
             return 1 ;;
