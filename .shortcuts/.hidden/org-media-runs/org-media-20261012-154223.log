@@ -1,0 +1,25 @@
+=== org-media run: 2026-10-12 15:42:23 ===
+    run log: /data/data/com.termux/files/home/.shortcuts/.hidden/org-media-runs/org-media-20261012-154223.log
+! no matching files in /data/data/com.termux/files/home/storage/shared/DCIM/Camera
+  What's available right now:
+    camera: 0 file(s)
+    screenshots: 2 file(s)
+    downloads: 0 file(s)
+  [waiting on dialog] Pick a different source? -- check the popup on your screen
+  [waiting on dialog] Source? (camera: 0 files | screenshots: 2 files | downloads: 0 files) -- check the popup on your screen
+  [waiting on dialog] Enter NEW folder name to create in shared storage (e.g., 'Camera_Backup') -- check the popup on your screen
+--------------------------------------------------------
+Source:      /data/data/com.termux/files/home/storage/shared/DCIM/Screenshots
+Destination: /data/data/com.termux/files/home/storage/shared/g
+Files:       2 (933Ki)
+Filters:     type=all
+Sample:
+  AISelect_20261012_154152_Chrome.jpg
+  AISelect_20261012_154212_Chrome.jpg
+--------------------------------------------------------
+Finished scanning 3 file(s)
+Finished scanning 1 file(s)
+--------------------------------------------------------
+OK moved 2 file(s) -> /data/data/com.termux/files/home/storage/shared/g
+Manifest: /data/data/com.termux/files/home/.shortcuts/.hidden/org-media-manifests/org-media-20261012-154248.log
+--------------------------------------------------------

@@ -1,0 +1,11 @@
+=== org-media run: 2026-10-12 14:14:03 ===
+    run log: /data/data/com.termux/files/home/.shortcuts/.hidden/org-media-runs/org-media-20261012-141403.log
+! no matching files in /data/data/com.termux/files/home/storage/shared/DCIM/Camera
+  What's available right now:
+    camera: 0 file(s)
+    screenshots: 0 file(s)
+    downloads: 0 file(s)
+  [waiting on dialog] Pick a different source? -- check the popup on your screen
+  [waiting on dialog] Source? (camera: 0 files | screenshots: 0 files | downloads: 0 files) -- check the popup on your screen
+  [waiting on dialog] Source path (absolute, or under shared/) -- check the popup on your screen
+x source dir missing: No source entered. Exiting.
