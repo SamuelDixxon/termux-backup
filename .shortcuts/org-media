@@ -126,7 +126,8 @@ resolve_source() {
             return 1 ;;
         downloads|download) echo "$SHARED/Download" ;;
         edits|edit)
-            for p in "$SHARED/Edits" "$SHARED/edits" "$SHARED/DCIM/Edits" "$SHARED/Movies/Edits"; do
+            # Movies/Edits first: confirmed Meta Edits app export path (2026-10-12)
+            for p in "$SHARED/Movies/Edits" "$SHARED/Edits" "$SHARED/edits" "$SHARED/DCIM/Edits"; do
                 [ -d "$p" ] && { echo "$p"; return 0; }
             done
             return 1 ;;

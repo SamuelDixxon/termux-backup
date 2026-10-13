@@ -2,6 +2,7 @@
 
 | Version | Date | Component | Status | Summary |
 |---------|------|-----------|--------|---------|
+| v4.4.3 | 2026-10 | org-media | new | edits source now prefers Movies/Edits first -- confirmed as the Meta Edits app export location on-device |
 | v4.4.2 | 2026-10 | org-media | new | edits named source also checks Movies/Edits (Meta Edits app export candidate) |
 | v4.4.1 | 2026-10 | tools, .bashrc | new | tools inventory skips docs/dotfiles (*.md no longer listed as tools); ~/.shortcuts added to PATH (duplicate-guarded) so `tools`, `org-media`, `backup-all`, ... run as bare commands, not just from the widget |
 | v4.4 | 2026-10 | org-media | new | Multi-source: no-arg default now sweeps the four accumulation points (Camera, Edits, Muse, Screenshots); source picker is a multi-select checkbox dialog; --source accepts comma-separated keys (e.g. --source camera,edits); preview shows per-source counts; manifest records the source set; --source camera restores the strict original for pipelines |
