@@ -113,6 +113,7 @@ mentions what's new since your last session.
 | [docs/debugging.md](docs/debugging.md) | What broke, and what did it teach? |
 | [docs/proposals.md](docs/proposals.md) | What's next? (voice control, efficiency ideas) |
 | [docs/operations.md](docs/operations.md) | Install, dependencies, storage zones, Pi setup, utility reference |
+| [docs/scheduling.md](docs/scheduling.md) | How does the project stay synced on its own? (nightly-sync, scheduler tradeoffs) |
 | [docs/changelog.md](docs/changelog.md) | What changed, when -- and what's still unverified |
 
 ---

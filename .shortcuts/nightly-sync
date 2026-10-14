@@ -1,0 +1,51 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# nightly-sync — scheduled round trip: sync-in (GitHub -> phone), then
+# backup-all (phone -> GitHub). Meant to be registered with
+# termux-job-scheduler via `schedule-sync`; see docs/scheduling.md.
+#
+# Safe unattended: backup-all refuses real conflicts instead of guessing,
+# and failures fire a termux-notification instead of dying quietly.
+# Invokes both steps via `bash` explicitly so a lost exec bit (see the
+# 2026-10-12 banner/widget incident) can never silently skip the run.
+# =============================================================================
+# SUMMARY: Scheduled sync round trip: sync-in then backup-all, with logging + failure alerts
+# GROUP: backup
+set -uo pipefail
+
+LOG_DIR="$HOME/.shortcuts/.hidden/nightly-sync"
+mkdir -p "$LOG_DIR"
+ls -t "$LOG_DIR"/nightly-sync-*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
+LOG="$LOG_DIR/nightly-sync-$(date +%Y%m%d-%H%M%S).log"
+
+notify() { # $1 = step that failed
+    if command -v termux-notification >/dev/null 2>&1; then
+        termux-notification --title "nightly-sync" --content "$1 failed -- see $LOG"
+    fi
+}
+
+{
+    echo "=== nightly-sync $(date '+%F %T %Z') ==="
+
+    echo "--- 1/2 sync-in (GitHub -> phone) ---"
+    if bash "$HOME/.shortcuts/sync-in"; then
+        echo "sync-in OK"
+    else
+        code=$?
+        echo "sync-in FAILED (exit $code)"
+        notify "sync-in"
+        exit 1
+    fi
+
+    echo "--- 2/2 backup-all (phone -> GitHub) ---"
+    if bash "$HOME/.shortcuts/backup-all"; then
+        echo "backup-all OK"
+    else
+        code=$?
+        echo "backup-all FAILED (exit $code)"
+        notify "backup-all"
+        exit 1
+    fi
+
+    echo "=== done $(date '+%F %T %Z') ==="
+} >> "$LOG" 2>&1

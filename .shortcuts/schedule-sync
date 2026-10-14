@@ -1,0 +1,41 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# =============================================================================
+# schedule-sync — one-time setup: register nightly-sync with termux-job-scheduler
+# =============================================================================
+# SUMMARY: Register nightly-sync with termux-job-scheduler (once-daily, WiFi + charging)
+# GROUP: backup
+#
+# Usage (on the phone, Termux:API app installed):
+#   schedule-sync
+#
+# Registers job 1001 -> ~/.shortcuts/nightly-sync: at most once every 24h,
+# only on unmetered network while charging, persisted across reboots.
+# Idempotent: re-running replaces the registration (same job id).
+# See docs/scheduling.md for the tradeoff analysis (job-scheduler vs cronie
+# vs Tasker) and verification steps.
+# =============================================================================
+set -uo pipefail
+
+need() { # $1 = command, $2 = install hint
+    command -v "$1" >/dev/null 2>&1 || { echo "x missing: $1 -- $2"; exit 1; }
+}
+need termux-job-scheduler "install the Termux:API app, then run: pkg install termux-api"
+need termux-notification "pkg install termux-api"
+
+SCRIPT="$HOME/.shortcuts/nightly-sync"
+[ -f "$SCRIPT" ] || { echo "x $SCRIPT not found -- sync-in first, then re-run"; exit 1; }
+[ -x "$SCRIPT" ] || { echo "x $SCRIPT is not executable -- run: chmod +x $SCRIPT"; exit 1; }
+
+termux-job-scheduler \
+    --job-id 1001 \
+    --script "$SCRIPT" \
+    --period-ms 86400000 \
+    --network unmetered \
+    --charging true \
+    --persisted true
+
+echo "registered job 1001 -> $SCRIPT"
+echo "  at most once every 24h, unmetered network only, while charging, persists across reboots"
+echo "  logs: ~/.shortcuts/.hidden/nightly-sync/"
+echo "  re-run schedule-sync any time to update the schedule"
+echo "  full flag list on-device: termux-job-scheduler --help"

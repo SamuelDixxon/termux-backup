@@ -2,6 +2,7 @@
 
 | Version | Date | Component | Status | Summary |
 |---------|------|-----------|--------|---------|
+| v4.4.4 | 2026-10 | nightly-sync, schedule-sync | new | Scheduled sync: new `nightly-sync` (sync-in then backup-all, per-run logs in .hidden/nightly-sync/, termux-notification on failure; both steps invoked via `bash` so a lost exec bit can't silently skip the run) + `schedule-sync` one-time setup registering it with termux-job-scheduler (24h, unmetered + charging, persisted). Tradeoff analysis (job-scheduler vs cronie vs Tasker) in docs/scheduling.md. Needs one on-device scheduled run to confirm |
 | v4.4.3 | 2026-10 | org-media | new | edits source now prefers Movies/Edits first -- confirmed as the Meta Edits app export location on-device |
 | v4.4.2 | 2026-10 | org-media | new | edits named source also checks Movies/Edits (Meta Edits app export candidate) |
 | v4.4.1 | 2026-10 | tools, .bashrc | new | tools inventory skips docs/dotfiles (*.md no longer listed as tools); ~/.shortcuts added to PATH (duplicate-guarded) so `tools`, `org-media`, `backup-all`, ... run as bare commands, not just from the widget |
