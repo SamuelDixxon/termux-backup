@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# SUMMARY: Pull the repo, mirror .shortcuts, update .bashrc if newer
+# SUMMARY: Pull the repo, mirror .shortcuts, update .bashrc if it differs
 # GROUP: backup
 set -euo pipefail
 
@@ -22,8 +22,17 @@ echo "🔄 Mirroring Backup to System (Deleting junk)..."
 # This makes ~/.shortcuts EXACTLY match ~/termux-backup/.shortcuts
 rsync -rtv --delete "$D/.shortcuts/" "$S/"
 
-# 3. Update .bashrc if newer
-if [ "$D/.bashrc" -nt "$B" ]; then
+# 3. Update .bashrc if its contents differ from the repo copy.
+# mtime comparison (-nt) lies after any manual copy (the live file looks
+# "newer" forever), so compare bytes instead; fall back to -nt if cmp is missing.
+bashrc_differs() {
+    if command -v cmp >/dev/null 2>&1; then
+        ! cmp -s "$D/.bashrc" "$B"
+    else
+        [ "$D/.bashrc" -nt "$B" ]
+    fi
+}
+if bashrc_differs; then
     echo "🆕 Updating .bashrc..."
     cp -f "$D/.bashrc" "$B"
 fi
