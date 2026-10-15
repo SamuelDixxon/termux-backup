@@ -2,6 +2,7 @@
 
 | Version | Date | Component | Status | Summary |
 |---------|------|-----------|--------|---------|
+| v4.4.4 | 2026-10 | org-media | fix | Removed per-run execution logging (.hidden/org-media-runs/): the widget-debugging diagnostic served its purpose; move manifests (undo trail) retained; committed run logs deleted from the repo |
 | v4.4.5 | 2026-10-14 | sync-in | fix | .bashrc deploy now compares file contents (`cmp -s`) instead of mtimes (`-nt`): every manual copy during debugging gave the live file a fresh mtime, so sync-in silently skipped all future .bashrc updates (including scheduled runs). Falls back to the old mtime check if `cmp` is unavailable |
 | v4.4.4 | 2026-10 | nightly-sync, schedule-sync | new | Scheduled sync: new `nightly-sync` (sync-in then backup-all, per-run logs in .hidden/nightly-sync/, termux-notification on failure; both steps invoked via `bash` so a lost exec bit can't silently skip the run) + `schedule-sync` one-time setup registering it with termux-job-scheduler (24h, unmetered + charging, persisted). Tradeoff analysis (job-scheduler vs cronie vs Tasker) in docs/scheduling.md. Needs one on-device scheduled run to confirm |
 | v4.4.3 | 2026-10 | org-media | new | edits source now prefers Movies/Edits first -- confirmed as the Meta Edits app export location on-device |

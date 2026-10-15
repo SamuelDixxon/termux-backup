@@ -106,14 +106,7 @@ for _cmd in termux-dialog jq; do
 done
 unset _cmd
 
-# --- run logging: widget sessions vanish on exit, the log does not ----------
-RUN_LOG_DIR="$HIDDEN/org-media-runs"
-mkdir -p "$RUN_LOG_DIR" "$MANIFEST_DIR"
-ls -t "$RUN_LOG_DIR"/org-media-*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
-RUN_LOG="$RUN_LOG_DIR/org-media-$(date +%Y%m%d-%H%M%S).log"
-exec > >(tee "$RUN_LOG") 2>&1
-echo "=== org-media run: $(date '+%Y-%m-%d %H:%M:%S') ==="
-echo "    run log: $RUN_LOG"
+mkdir -p "$MANIFEST_DIR"
 
 # --- source resolution -------------------------------------------------------
 resolve_source() {
