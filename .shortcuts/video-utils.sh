@@ -79,6 +79,36 @@ resolve_clip_source() {
     esac
 }
 
+# Interactive source picker for the clip tools (no-arg / widget taps).
+# Radio dialog over the named sources (with clip counts) plus any segment
+# folder under shared/ holding videos. Echoes the chosen source key.
+pick_segment_interactive() {
+    local opts="" title="Sandwich which source?" key p n d base
+    for key in camera screenshots downloads edits muse; do
+        p=$(resolve_clip_source "$key" 2>/dev/null) || continue
+        [ -d "$p" ] || continue
+        n=$(find "$p" -maxdepth 1 -type f \( -iname "*.mp4" -o -iname "*.mov" -o -iname "*.3gp" -o -iname "*.webm" -o -iname "*.mkv" \) 2>/dev/null | wc -l | tr -d ' ')
+        opts="${opts:+$opts,}$key"
+        title="$title ($key: $n)"
+    done
+    for d in "$SHARED"/*/; do
+        [ -d "$d" ] || continue
+        base=$(basename "$d")
+        case "$base" in
+            DCIM|Download|Android|Export|Movies|Pictures|Music|Documents|.*) continue ;;
+        esac
+        n=$(find "$d" -maxdepth 2 -type f \( -iname "*.mp4" -o -iname "*.mov" -o -iname "*.3gp" -o -iname "*.webm" -o -iname "*.mkv" \) 2>/dev/null | wc -l | tr -d ' ')
+        [ "$n" -eq 0 ] && continue
+        opts="${opts:+$opts,}$base"
+    done
+    [ -z "$opts" ] && { echo "x no clip sources found"; exit 1; }
+    echo "  [waiting on dialog] Pick source for sandwich -- check the popup on your screen" >&2
+    local pick
+    pick=$(termux-dialog radio -v "$opts" -t "$title" | jq -r '.text // ""')
+    [ -z "$pick" ] && { echo "No source chosen. Exiting."; exit 0; }
+    echo "$pick"
+}
+
 # Sets SRC. Exits 1 with usage/error message if segment arg or folder is bad.
 require_segment_folder() {
     local segment="$1" usage="$2"
