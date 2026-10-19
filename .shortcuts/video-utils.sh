@@ -135,10 +135,36 @@ detect_timeout() {
 collect_clips() {
     local max="$1"
     mapfile -t __candidates < <(
-        find "$SRC" -maxdepth 2 -type f -not -name ".*" \
+        find "$SRC" -maxdepth 2 -type f -not -name ".*" -not -path "*/.*/*" \
             \( -iname "*.mp4" -o -iname "*.mov" -o -iname "*.3gp" -o -iname "*.webm" -o -iname "*.mkv" \) \
             2>/dev/null | sort | head -"$max"
     )
+
+    # Prefer labeled versions: the burn workflow writes X_labeled.<ext> and
+    # stashes the raw X.<ext> in .burned_originals/. If a labeled copy exists,
+    # the same-named unlabeled file is that clip pre-burn -- drop it so
+    # reels/grids don't play everything twice.
+    if [ "${#__candidates[@]}" -gt 0 ]; then
+        local -A __labeled_base=()
+        local __bn
+        for clip in "${__candidates[@]}"; do
+            __bn="$(basename "$clip")"
+            case "$__bn" in
+                *_labeled.*) __labeled_base["${__bn%_labeled.*}"]=1 ;;
+            esac
+        done
+        if [ "${#__labeled_base[@]}" -gt 0 ]; then
+            local __deduped=()
+            for clip in "${__candidates[@]}"; do
+                __bn="$(basename "$clip")"
+                case "$__bn" in
+                    *_labeled.*) __deduped+=("$clip") ;;
+                    *) [ -z "${__labeled_base[${__bn%.*}]:-}" ] && __deduped+=("$clip") ;;
+                esac
+            done
+            __candidates=("${__deduped[@]}")
+        fi
+    fi
 
     if [ "${#__candidates[@]}" -eq 0 ]; then
         fail "No video files found in $SRC"

@@ -2,6 +2,7 @@
 
 | Version | Date | Component | Status | Summary |
 |---------|------|-----------|--------|---------|
+| v4.4.11 | 2026-10 | video-utils.sh | fix | collect_clips: exclude hidden directories (was pulling .burned_originals/ into reels) and drop unlabeled duplicates when an X_labeled.<ext> copy exists (labeled = finished, wins) |
 | v4.4.10 | 2026-10 | sandwich | fix | Default concat timeout 180s -> 900s (50 re-encoded clips need well over 3 min on a phone); also corrected --help defaults (--max is 50, --timeout is 900) |
 | v4.4.9 | 2026-10 | sandwich, video-utils.sh, sync-in | restore | Re-pushed v4.4.8 (sync-in) + v4.4.9 (sandwich picker) after the 20:16 backup-all mirrored the phone's stale scripts over them. Rule: run sync-in (deploy) BEFORE backup-all (push) when script changes are pending |
 | v4.4.9 | 2026-10 | sandwich, video-utils.sh | new | No-arg sandwich (Termux:Widget taps) now opens an interactive source picker: radio dialog over the named sources (camera/screenshots/downloads/edits/muse, with clip counts) plus any segment folder holding videos. Typed args work exactly as before |
