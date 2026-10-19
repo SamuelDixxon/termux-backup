@@ -1,22 +1,22 @@
-backup|backup-all|1791774450|Mirror ~/.shortcuts + ~/.bashrc to the git repo and push to GitHub (rebase-before-push, counter-safe)
-backup|backup-folder|1791774450|Pick segment folders via dialog and zip them to Export/
-backup|batch-backup|1791774450|Zip content segment folders into Export/ (4 modes, merge logic)
-backup|merge-counters|1791774450|Auto-resolve segments_data.json conflicts: highest counter wins per segment
-backup|sync-in|1791774450|Pull the repo, mirror .shortcuts, update .bashrc if newer
-backup|transfer-export|1791774450|Copy Export/ to SD card (USB) or Raspberry Pi (rsync over SSH)
-content|pistol_squat_log.sh|1791774450|Log a pistol-squat session, copy the summary to clipboard
-content|week-recap|1791774450|Generate title + description for a week's shorts bundled as one upload
-media|burn_thumb.sh|1791776807|Burn a sequential text label onto a video's first frames (thumbnail labeling)
-media|org-camera-album-burn.sh|1791774450|Move Camera files into a segment folder and burn sequential thumbnails
-media|org-camera-album|1791774450|Move all media out of DCIM/Camera into a new folder, rescan gallery
-media|org-media|1791832318|Move photos/videos from Camera, Screenshots, Downloads, Edits...
-media|sandwich|1791774450|Stitch a segment folder's clips into one sequential reel
-media|tapestry|1791774450|NxN grid of a segment's clips playing simultaneously
-media|video-utils.sh|1791774450|Shared ffmpeg helpers for tapestry/sandwich (library, not run directly)
-other|README.md|1776226133|(no description yet)
-other|README_diagrams.md|1776226045|(no description yet)
-pipeline|content-pipeline-segment-first|1791774450|Session-first pipeline: pick segment, copy hashtags, manage the counter
-pipeline|manager|1791774450|Hashtag manager (CRUD) for content segments
-pipeline|pipeline|1791774450|Post-shoot chain: org-camera-album -> backup-folder -> manager
-utility|clean-session|1791774450|Kill the Termux session for a fresh start
-utility|tools|1791832331|List all installed pipeline tools, grouped, with one-line descriptions
+backup|backup-all|1791852074|Mirror ~/.shortcuts + ~/.bashrc to the git repo and push to GitHub (rebase-before-push, counter-safe)
+backup|backup-folder|1791852074|Pick segment folders via dialog and zip them to Export/
+backup|batch-backup|1791852074|Zip content segment folders into Export/ (4 modes, merge logic)
+backup|merge-counters|1791852074|Auto-resolve segments_data.json conflicts: highest counter wins per segment
+backup|nightly-sync|1792368985|Scheduled sync round trip: sync-in then backup-all, with logging + failure alerts
+backup|schedule-sync|1792368985|Register nightly-sync with termux-job-scheduler (once-daily, WiFi + charging)
+backup|sync-in|1792368985|Pull the repo, mirror .shortcuts, update .bashrc if it differs
+backup|transfer-export|1791852074|Copy Export/ to SD card (USB) or Raspberry Pi (rsync over SSH)
+content|pistol_squat_log.sh|1791852074|Log a pistol-squat session, copy the summary to clipboard
+content|week-recap|1791852074|Generate title + description for a week's shorts bundled as one upload
+media|burn_thumb.sh|1791852074|Burn a sequential text label onto a video's first frames (thumbnail labeling)
+media|org-camera-album-burn.sh|1791852074|Move Camera files into a segment folder and burn sequential thumbnails
+media|org-camera-album|1791852074|Move all media out of DCIM/Camera into a new folder, rescan gallery
+media|org-media|1792368985|Move photos/videos from Camera, Edits, Muse, Screenshots...
+media|sandwich|1792368985|Stitch a segment folder's clips into one sequential reel
+media|tapestry|1791852074|NxN grid of a segment's clips playing simultaneously
+media|video-utils.sh|1792369065|Shared ffmpeg helpers for tapestry/sandwich (library, not run directly)
+pipeline|content-pipeline-segment-first|1791852074|Session-first pipeline: pick segment, copy hashtags, manage the counter
+pipeline|manager|1791852074|Hashtag manager (CRUD) for content segments
+pipeline|pipeline|1791852074|Post-shoot chain: org-camera-album -> backup-folder -> manager
+utility|clean-session|1791852074|Kill the Termux session for a fresh start
+utility|tools|1791852074|List all installed pipeline tools, grouped, with one-line descriptions
