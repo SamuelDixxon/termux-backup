@@ -67,10 +67,10 @@ for __a in "$@"; do
             echo "  <segment>      Folder under shared/, or a named source:"
             echo "                 camera | screenshots | downloads | edits | muse"
             echo ""
-            echo "  --max N        Limit to first N clips (default: 20)"
+            echo "  --max N        Limit to first N clips (default: 50)"
             echo "  --crf N        Quality 18-28, lower=better (default: 23)"
             echo "  --slow         Slower encode, smaller file"
-            echo "  --timeout N    Hang-safety timeout in seconds (default: 600)"
+            echo "  --timeout N    Hang-safety timeout in seconds (default: 900)"
             echo ""
             echo "For a simultaneous NxN grid instead of sequential: tapestry"
             echo ""
@@ -98,7 +98,7 @@ fi
 MAX_CLIPS=50
 CRF=23
 PRESET="fast"
-TIMEOUT_SECS=180
+TIMEOUT_SECS=900
 
 shift
 ARGS=("$@")
