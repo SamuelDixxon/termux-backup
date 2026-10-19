@@ -11,7 +11,11 @@
 #   - Signal processing experiments (educational / ATE crossover)
 # =============================================================================
 
-fastfetch
+# Interactive shells only: fastfetch probes hardware and costs seconds.
+# Non-interactive shells (scp, rsync, scripts sourcing .bashrc) stay instant.
+if [[ $- == *i* ]]; then
+    fastfetch
+fi
 
 # =============================================================================
 # EXTERNAL SCRIPT SOURCING

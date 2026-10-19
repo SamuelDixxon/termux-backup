@@ -2,6 +2,7 @@
 
 | Version | Date | Component | Status | Summary |
 |---------|------|-----------|--------|---------|
+| - | 2026-10 | .bashrc | fix | fastfetch now runs on interactive shells only (was unconditional -- its hardware probing cost seconds on every shell, including non-interactive) |
 | - | 2026-10 | org-media | cleanup | Deleted the 3 remaining org-media move manifests (2026-10-12) from the repo; per-run logs were already removed in v4.4.6 |
 | v4.4.12 | 2026-10 | week-recap | rework | No-arg run now opens a segment picker dialog (widget taps used to just print usage and exit); segment lookup is exact-then-case-insensitive and no longer interpolates shell vars into python; --help added |
 | v4.4.11 | 2026-10 | video-utils.sh | fix | collect_clips: exclude hidden directories (was pulling .burned_originals/ into reels) and drop unlabeled duplicates when an X_labeled.<ext> copy exists (labeled = finished, wins) |
