@@ -56,6 +56,29 @@ require_ffmpeg() {
     fi
 }
 
+# Friendly source names for the clip tools (sandwich, tapestry).
+# Anything else falls through to $SHARED/<name> exactly as before.
+resolve_clip_source() {
+    local name="$1" p
+    case "$name" in
+        camera) echo "$SHARED/DCIM/Camera"; return ;;
+        screenshots)
+            for p in "$SHARED/DCIM/Screenshots" "$SHARED/Pictures/Screenshots"; do
+                [ -d "$p" ] && { echo "$p"; return; }
+            done
+            echo "$SHARED/DCIM/Screenshots"; return ;;
+        downloads|download) echo "$SHARED/Download"; return ;;
+        edits|edit)
+            # Movies/Edits first: confirmed Meta Edits app export path
+            for p in "$SHARED/Movies/Edits" "$SHARED/Edits" "$SHARED/DCIM/Edits"; do
+                [ -d "$p" ] && { echo "$p"; return; }
+            done
+            echo "$SHARED/Movies/Edits"; return ;;
+        muse) echo "$SHARED/DCIM/Muse"; return ;;
+        *) echo "$SHARED/$name"; return ;;
+    esac
+}
+
 # Sets SRC. Exits 1 with usage/error message if segment arg or folder is bad.
 require_segment_folder() {
     local segment="$1" usage="$2"
@@ -63,7 +86,7 @@ require_segment_folder() {
         echo -e "\n${RED}${usage}${RESET}\n"
         exit 1
     fi
-    SRC="$SHARED/$segment"
+    SRC="$(resolve_clip_source "$segment")"
     if [ ! -d "$SRC" ]; then
         fail "Folder not found: $SRC"
         exit 1

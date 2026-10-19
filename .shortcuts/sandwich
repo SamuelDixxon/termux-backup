@@ -26,7 +26,11 @@
 # USAGE:
 #   sandwich <segment> [options]
 #
+#   <segment> is a folder under shared/, or a named source:
+#     camera | screenshots | downloads | edits | muse
+#
 #   sandwich pistol                     concat all clips in shared/pistol/
+#   sandwich camera                     concat raw clips straight from DCIM/Camera
 #   sandwich skip --max 10              concat first 10 clips only
 #   sandwich pistol --timeout 900       raise the hang-safety timeout to 15m
 #
@@ -57,6 +61,9 @@ for __a in "$@"; do
             echo ""
             echo "Usage: sandwich <segment> [--max N] [--crf N] [--slow] [--timeout N]"
             echo ""
+            echo "  <segment>      Folder under shared/, or a named source:"
+            echo "                 camera | screenshots | downloads | edits | muse"
+            echo ""
             echo "  --max N        Limit to first N clips (default: 20)"
             echo "  --crf N        Quality 18-28, lower=better (default: 23)"
             echo "  --slow         Slower encode, smaller file"
@@ -66,6 +73,7 @@ for __a in "$@"; do
             echo ""
             echo "Examples:"
             echo "  sandwich pistol"
+            echo "  sandwich camera"
             echo "  sandwich skip --max 10"
             exit 0
             ;;
