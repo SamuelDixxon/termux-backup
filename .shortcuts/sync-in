@@ -1,5 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# SUMMARY: Pull the repo, mirror .shortcuts (counters merge max-wins), update .bashrc if it differs
+# SUMMARY: Pull the repo, mirror .shortcuts, update .bashrc if it differs
 # GROUP: backup
 set -euo pipefail
 
@@ -9,16 +9,6 @@ B="$HOME/.bashrc"
 DEVICE=$(getprop ro.product.model | tr -d ' ')
 
 echo "📱 Device: $DEVICE"
-
-# 0. Stash the phone's live counters BEFORE the mirror can clobber them.
-# Counters are monotonic (max-wins); a blind rsync would "reset" any
-# increments made on this phone since the last push.
-COUNTERS_FILE=".hidden/segments_data.json"
-PHONE_COUNTERS=""
-if [ -f "$S/$COUNTERS_FILE" ]; then
-    PHONE_COUNTERS="$(mktemp)"
-    cp "$S/$COUNTERS_FILE" "$PHONE_COUNTERS"
-fi
 
 # 1. Pull latest "Source of Truth" from GitHub
 echo "📥 Pulling latest Cloud data..."
@@ -32,51 +22,7 @@ echo "🔄 Mirroring Backup to System (Deleting junk)..."
 # This makes ~/.shortcuts EXACTLY match ~/termux-backup/.shortcuts
 rsync -rtv --delete "$D/.shortcuts/" "$S/"
 
-# 3. Merge counters (max-wins): no counter ever goes backwards.
-# The rsync above just overwrote the live counters file with the repo copy;
-# fold the stashed phone values back in, keeping the highest per segment.
-if [ -n "$PHONE_COUNTERS" ] && [ -f "$PHONE_COUNTERS" ] && command -v python3 >/dev/null 2>&1; then
-    echo "Merging counters (highest wins per segment)..."
-    python3 - "$PHONE_COUNTERS" "$S/$COUNTERS_FILE" <<'PYEOF_INNER'
-import json, sys
-phone_p, live_p = sys.argv[1], sys.argv[2]
-def load(p):
-    with open(p) as f:
-        j = json.load(f)
-    if isinstance(j, dict):
-        return j, j.get("segments", [])
-    return None, j
-try:
-    phone_top, phone_segs = load(phone_p)
-    live_top, live_segs = load(live_p)
-except Exception as e:
-    print(f"! counter merge skipped ({e}) -- keeping repo copy", file=sys.stderr)
-    sys.exit(0)
-phone = {r.get("name"): r.get("counter", 0) for r in phone_segs if r.get("name")}
-seen = set()
-for r in live_segs:
-    name = r.get("name")
-    if name in phone:
-        r["counter"] = max(r.get("counter", 0), phone[name])
-    seen.add(name)
-for r in phone_segs:
-    if r.get("name") not in seen:
-        live_segs.append(r)
-with open(live_p, "w") as f:
-    if isinstance(live_top, dict):
-        live_top["segments"] = live_segs
-        json.dump(live_top, f, indent=2)
-    else:
-        json.dump(live_segs, f, indent=2)
-print("v counters merged -- none decreased")
-PYEOF_INNER
-    rm -f "$PHONE_COUNTERS"
-elif [ -n "$PHONE_COUNTERS" ]; then
-    echo "! python3 not found -- skipping counter merge (counters may be stale)" >&2
-    rm -f "$PHONE_COUNTERS"
-fi
-
-# 4. Update .bashrc if its contents differ from the repo copy.
+# 3. Update .bashrc if its contents differ from the repo copy.
 # mtime comparison (-nt) lies after any manual copy (the live file looks
 # "newer" forever), so compare bytes instead; fall back to -nt if cmp is missing.
 bashrc_differs() {

@@ -395,7 +395,7 @@
       "name": "grip",
       "short_desc": "training gri0 ability",
       "full_desc": "type stuffs with grip strength, similar to climb",
-      "counter": 18,
+      "counter": 22,
       "hashtags": [
         "#gripstrength",
         "#hold",

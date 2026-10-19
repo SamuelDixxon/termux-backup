@@ -29,8 +29,6 @@
 #   <segment> is a folder under shared/, or a named source:
 #     camera | screenshots | downloads | edits | muse
 #
-#   sandwich                            no args -> interactive source picker
-#                                       (Termux:Widget friendly)
 #   sandwich pistol                     concat all clips in shared/pistol/
 #   sandwich camera                     concat raw clips straight from DCIM/Camera
 #   sandwich skip --max 10              concat first 10 clips only
@@ -61,8 +59,7 @@ for __a in "$@"; do
     case "$__a" in
         --help|-h)
             echo ""
-            echo "Usage: sandwich [<segment>] [--max N] [--crf N] [--slow] [--timeout N]"
-            echo "       (no <segment>: interactive source picker)"
+            echo "Usage: sandwich <segment> [--max N] [--crf N] [--slow] [--timeout N]"
             echo ""
             echo "  <segment>      Folder under shared/, or a named source:"
             echo "                 camera | screenshots | downloads | edits | muse"
@@ -86,15 +83,7 @@ done
 # =============================================================================
 # ARGUMENT PARSING
 # =============================================================================
-if [ -z "${1:-}" ]; then
-    # No args (e.g. Termux:Widget tap): pick the source interactively.
-    for _cmd in termux-dialog jq; do
-        command -v "$_cmd" >/dev/null 2>&1 || { echo "x $_cmd not found -- pkg install termux-api jq (or run: sandwich <segment>)"; exit 1; }
-    done
-    SEGMENT=$(pick_segment_interactive)
-else
-    SEGMENT="$1"
-fi
+SEGMENT="$1"
 MAX_CLIPS=50
 CRF=23
 PRESET="fast"
