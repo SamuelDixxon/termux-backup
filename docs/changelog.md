@@ -2,6 +2,7 @@
 
 | Version | Date | Component | Status | Summary |
 |---------|------|-----------|--------|---------|
+| - | 2026-10 | org-media | cleanup | Deleted the 3 remaining org-media move manifests (2026-10-12) from the repo; per-run logs were already removed in v4.4.6 |
 | v4.4.12 | 2026-10 | week-recap | rework | No-arg run now opens a segment picker dialog (widget taps used to just print usage and exit); segment lookup is exact-then-case-insensitive and no longer interpolates shell vars into python; --help added |
 | v4.4.11 | 2026-10 | video-utils.sh | fix | collect_clips: exclude hidden directories (was pulling .burned_originals/ into reels) and drop unlabeled duplicates when an X_labeled.<ext> copy exists (labeled = finished, wins) |
 | v4.4.10 | 2026-10 | sandwich | fix | Default concat timeout 180s -> 900s (50 re-encoded clips need well over 3 min on a phone); also corrected --help defaults (--max is 50, --timeout is 900) |
