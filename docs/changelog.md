@@ -2,6 +2,7 @@
 
 | Version | Date | Component | Status | Summary |
 |---------|------|-----------|--------|---------|
+| v4.4.8 | 2026-10 | sync-in | fix | Counters can no longer be reset by sync-in: the phone's live segments_data.json is stashed before the rsync mirror and merged back with max-wins per segment afterwards (same monotonic rule as merge-counters) |
 | v4.4.7 | 2026-10 | sandwich, video-utils.sh | new | Named clip sources: `sandwich camera` (and screenshots/downloads/edits/muse) now resolve to their shared-storage folders via a new resolve_clip_source() in video-utils.sh; plain segment names work exactly as before. tapestry inherits the same aliases |
 | v4.4.6 | 2026-10 | org-media | fix | Removed per-run execution logging (.hidden/org-media-runs/): the widget-debugging diagnostic served its purpose; move manifests (undo trail) retained; committed run logs deleted from the repo |
 | v4.4.5 | 2026-10-14 | sync-in | fix | .bashrc deploy now compares file contents (`cmp -s`) instead of mtimes (`-nt`): every manual copy during debugging gave the live file a fresh mtime, so sync-in silently skipped all future .bashrc updates (including scheduled runs). Falls back to the old mtime check if `cmp` is unavailable |
