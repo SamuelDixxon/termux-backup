@@ -170,10 +170,20 @@ echo "  week -- every short from these sessions, bundled into one recap."
 echo "  Segment #${START_COUNTER} through #${END_COUNTER}."
 echo ""
 
-# Picked via dialog (widget flow): show the result in a copyable dialog too --
-# widget sessions can close before the terminal output is readable.
-if $USED_PICKER && command -v termux-dialog >/dev/null 2>&1; then
-    termux-dialog text -t "Week Recap" -i "${SEG_TITLE} Progress (${START_COUNTER}-${END_COUNTER})
+# The deliverable: title + description as one clean block.
+CLIP_TEXT="${SEG_TITLE} Progress (${START_COUNTER}-${END_COUNTER})
 
-A week of ${SEGMENT} training, ${RANGE_LABEL}. ${REPS} logged this week -- every short from these sessions, bundled into one recap. Segment #${START_COUNTER} through #${END_COUNTER}." >/dev/null 2>&1
+A week of ${SEGMENT} training, ${RANGE_LABEL}. ${REPS} logged this week -- every short from these sessions, bundled into one recap. Segment #${START_COUNTER} through #${END_COUNTER}."
+
+# Picked via dialog (widget flow): show the block in an editable dialog first
+# (numbers can be tweaked there); whatever is in the box on OK is what gets
+# copied to the clipboard.
+if $USED_PICKER && command -v termux-dialog >/dev/null 2>&1; then
+    __edited="$(termux-dialog text -t "Week Recap" -i "$CLIP_TEXT" | jq -r '.text // ""' 2>/dev/null)"
+    [ -n "$__edited" ] && CLIP_TEXT="$__edited"
+fi
+
+if command -v termux-clipboard-set >/dev/null 2>&1; then
+    printf '%s' "$CLIP_TEXT" | termux-clipboard-set
+    echo "(Copied title + description to clipboard)"
 fi
