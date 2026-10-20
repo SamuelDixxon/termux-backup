@@ -41,6 +41,7 @@ SEGMENT=""
 START_ARG=""
 END_ARG=""
 THIS_WEEK=false
+USED_PICKER=false
 
 for __a in "$@"; do
     case "$__a" in
@@ -93,6 +94,7 @@ fi
 
 # -- segment picker (no args, e.g. Termux:Widget tap) -------------------------
 if [ -z "$SEGMENT" ]; then
+    USED_PICKER=true
     for _cmd in termux-dialog jq python3; do
         command -v "$_cmd" >/dev/null 2>&1 || { echo "x $_cmd not found -- pkg install termux-api jq python"; exit 1; }
     done
@@ -167,3 +169,11 @@ echo "  A week of ${SEGMENT} training, ${RANGE_LABEL}. ${REPS} logged this"
 echo "  week -- every short from these sessions, bundled into one recap."
 echo "  Segment #${START_COUNTER} through #${END_COUNTER}."
 echo ""
+
+# Picked via dialog (widget flow): show the result in a copyable dialog too --
+# widget sessions can close before the terminal output is readable.
+if $USED_PICKER && command -v termux-dialog >/dev/null 2>&1; then
+    termux-dialog text -t "Week Recap" -i "${SEG_TITLE} Progress (${START_COUNTER}-${END_COUNTER})
+
+A week of ${SEGMENT} training, ${RANGE_LABEL}. ${REPS} logged this week -- every short from these sessions, bundled into one recap. Segment #${START_COUNTER} through #${END_COUNTER}." >/dev/null 2>&1
+fi

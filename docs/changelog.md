@@ -2,6 +2,7 @@
 
 | Version | Date | Component | Status | Summary |
 |---------|------|-----------|--------|---------|
+| v4.4.14 | 2026-10 | week-recap | fix | When the segment is picked via dialog (widget flow), the result is also shown in a copyable dialog -- widget sessions can close before terminal output is readable |
 | v4.4.13 | 2026-10 | week-recap | rework | Explicit range mode: `week-recap pistol 639 671` uses exactly those numbers (no state file). All data work consolidated into one python pass (was five -- cold starts stacked up on-device); picker title shortened (was all 31 segments + counters) |
 | - | 2026-10 | .bashrc | fix | fastfetch now runs on interactive shells only (was unconditional -- its hardware probing cost seconds on every shell, including non-interactive) |
 | - | 2026-10 | org-media | cleanup | Deleted the 3 remaining org-media move manifests (2026-10-12) from the repo; per-run logs were already removed in v4.4.6 |
