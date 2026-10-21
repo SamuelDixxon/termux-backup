@@ -223,7 +223,7 @@
       "name": "tea review",
       "short_desc": "tea tasting",
       "full_desc": "tea reviews",
-      "counter": 8,
+      "counter": 9,
       "hashtags": [
         "#teareview",
         "#tea",
@@ -395,7 +395,7 @@
       "name": "grip",
       "short_desc": "training gri0 ability",
       "full_desc": "type stuffs with grip strength, similar to climb",
-      "counter": 22,
+      "counter": 23,
       "hashtags": [
         "#gripstrength",
         "#hold",
