@@ -4,28 +4,38 @@
 # =============================================================================
 # week-recap
 # =============================================================================
-# Generates a title + description for bundling a week's worth of shorts
-# into one long-form sandwich upload -- e.g. "Pistol Progress (639-671)".
-# Computes the previous full Monday-Sunday range.
+# Generates a title + description for bundling a segment's shorts into one
+# long-form sandwich upload, in the established format:
+#
+#   Title:       Pistol Squat Progress (573-615) August 03, 2026 – August 16, 2026
+#   Description: Welcome to another weekly breakdown of the Pistol Squat
+#                Progress series! This log tracks ... from <start> through
+#                <end>. Follow along ... for reps <start> through <end>.
+#
+# The DATE RANGE comes from the clips themselves: the oldest and newest
+# clip dates in the segment folder (filename date first, then ffprobe
+# creation_time, then file mtime). Falls back to the previous Mon-Sun
+# week if the folder has no datable clips.
 #
 # EPISODE RANGE:
 #   Explicit:  week-recap pistol 639 671   -> uses exactly those numbers.
 #   Auto:      week-recap pistol           -> start = counter saved at the
-#              last run (week_recap_state.json), end = current counter;
-#              this run's end becomes next run's start.
+#              last run (week_recap_state.json), end = current counter.
+#
+# CLIPBOARD: title is copied first; a dialog pauses so you can paste it,
+# then the description is copied. Ready to paste into the upload form.
 #
 # USAGE:
 #   week-recap                         pick the segment from a dialog
-#   week-recap pistol                  auto range, previous Mon-Sun
+#   week-recap pistol                  auto range
 #   week-recap pistol 639 671          explicit range
-#   week-recap pistol --this-week      current week instead of previous
 #
 # INSTALL:
 #   cp week-recap ~/.shortcuts/
 #   chmod +x ~/.shortcuts/week-recap
 #
 # DEPENDENCIES:
-#   termux-api (dialog for the no-arg picker), jq, python3
+#   termux-api (dialogs + clipboard), jq, python3, ffprobe (optional)
 # =============================================================================
 
 if [ -z "$HOME" ]; then
@@ -35,23 +45,24 @@ export PATH="/data/data/com.termux/files/usr/bin:$PATH"
 
 DATA_FILE="$HOME/.shortcuts/.hidden/segments_data.json"
 STATE_FILE="$HOME/.shortcuts/.hidden/week_recap_state.json"
+SHARED="$HOME/storage/shared"
 
 # -- argument parsing -------------------------------------------------------
 SEGMENT=""
 START_ARG=""
 END_ARG=""
-THIS_WEEK=false
-USED_PICKER=false
 
 for __a in "$@"; do
     case "$__a" in
         --help|-h)
             echo ""
-            echo "Usage: week-recap [<segment>] [start end] [--this-week]"
+            echo "Usage: week-recap [<segment>] [start end]"
             echo "       (no <segment>: pick from a dialog)"
             echo ""
             echo "  start end     Explicit episode range, e.g. 639 671"
-            echo "  --this-week   Use the current week instead of previous Mon-Sun"
+            echo "  Dates come from the segment folder's oldest/newest clips."
+            echo "  Title is copied to the clipboard first, then (after a"
+            echo "  dialog pause to paste) the description."
             echo ""
             echo "Examples:"
             echo "  week-recap"
@@ -67,7 +78,6 @@ i=0
 while [ $i -lt ${#ARGS[@]} ]; do
     arg="${ARGS[$i]}"
     case "$arg" in
-        --this-week) THIS_WEEK=true ;;
         --*)         echo "x unknown option: $arg"; exit 1 ;;
         *)
             if [ -z "$SEGMENT" ]; then
@@ -94,7 +104,6 @@ fi
 
 # -- segment picker (no args, e.g. Termux:Widget tap) -------------------------
 if [ -z "$SEGMENT" ]; then
-    USED_PICKER=true
     for _cmd in termux-dialog jq python3; do
         command -v "$_cmd" >/dev/null 2>&1 || { echo "x $_cmd not found -- pkg install termux-api jq python"; exit 1; }
     done
@@ -110,18 +119,19 @@ print(','.join(s['name'] for s in segs))
     [ -z "$SEGMENT" ] && { echo "No segment chosen. Exiting."; exit 0; }
 fi
 
-# -- resolve segment + episode range in ONE python pass -----------------------
-__res="$(python3 - "$SEGMENT" "$DATA_FILE" "$STATE_FILE" "$START_ARG" "$END_ARG" <<'PYEOF'
-import json, os, sys
-want, data_path, state_path, start_arg, end_arg = sys.argv[1:6]
+# -- ONE python pass: resolve segment, counters, descs, clip dates ------------
+__res="$(python3 - "$SEGMENT" "$DATA_FILE" "$STATE_FILE" "$START_ARG" "$END_ARG" "$SHARED" <<'PYEOF'
+import json, os, re, subprocess, sys, datetime
+want, data_path, state_path, start_arg, end_arg, shared = sys.argv[1:7]
 d = json.load(open(data_path))
 segs = d['segments'] if isinstance(d, dict) else d
 m = [s for s in segs if s['name'] == want] or \
     [s for s in segs if s['name'].lower() == want.lower()]
 if not m:
     sys.exit(0)
-name = m[0]['name']
-counter = m[0].get('counter', 0)
+rec = m[0]
+name = rec['name']
+counter = rec.get('counter', 0)
 end = int(end_arg) if end_arg else counter
 if start_arg:
     start = int(start_arg)
@@ -133,7 +143,51 @@ else:
     state[name] = end
     os.makedirs(os.path.dirname(state_path), exist_ok=True)
     json.dump(state, open(state_path, 'w'), indent=2)
-print('%s\t%d\t%d' % (name, start, end))
+
+# display name: title-cased short_desc, last word singularized (squats->squat)
+words = (rec.get('short_desc') or name).split()
+disp = ' '.join(w[:1].upper() + w[1:] for w in words)
+if disp.endswith('s') and len(disp.rsplit(' ', 1)[-1]) > 3:
+    disp = disp[:-1]
+focus = rec.get('full_desc') or rec.get('short_desc') or name
+
+# clip dates from the segment folder: filename date, else ffprobe
+# creation_time, else mtime. Hidden dirs/files skipped, depth <= 2.
+dates = []
+src = os.path.join(shared, name)
+exts = ('.mp4', '.mov', '.3gp', '.webm', '.mkv')
+if os.path.isdir(src):
+    for root, dirs, files in os.walk(src):
+        dirs[:] = [x for x in dirs if not x.startswith('.')]
+        if root[len(src):].count(os.sep) >= 2:
+            dirs[:] = []
+        for f in files:
+            if f.startswith('.') or not f.lower().endswith(exts):
+                continue
+            p = os.path.join(root, f)
+            dt = None
+            mm = re.search(r'(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])', f)
+            if mm:
+                dt = '%s-%s-%s' % (mm.group(1), mm.group(2), mm.group(3))
+            if dt is None:
+                try:
+                    out = subprocess.run(['ffprobe', '-v', 'quiet', '-show_entries',
+                        'format_tags=creation_time', '-of', 'csv=p=0', p],
+                        capture_output=True, text=True, timeout=10).stdout.strip()
+                    if out:
+                        dt = out[:10]
+                except Exception:
+                    pass
+            if dt is None:
+                try:
+                    dt = datetime.date.fromtimestamp(os.path.getmtime(p)).isoformat()
+                except Exception:
+                    pass
+            if dt:
+                dates.append(dt)
+dmin = min(dates) if dates else ''
+dmax = max(dates) if dates else ''
+print('\t'.join([name, str(start), str(end), disp, focus, dmin, dmax]))
 PYEOF
 )"
 if [ -z "$__res" ]; then
@@ -143,47 +197,56 @@ fi
 SEGMENT="$(echo "$__res" | cut -f1)"
 START_COUNTER="$(echo "$__res" | cut -f2)"
 END_COUNTER="$(echo "$__res" | cut -f3)"
+SEG_NAME="$(echo "$__res" | cut -f4)"
+FOCUS="$(echo "$__res" | cut -f5)"
+DMIN="$(echo "$__res" | cut -f6)"
+DMAX="$(echo "$__res" | cut -f7)"
 
-# -- date range: previous full Monday-Sunday (or current with --this-week) ---
-# %u gives ISO weekday, 1=Monday..7=Sunday.
-TODAY_DOW=$(date +%u)
-CURRENT_MONDAY=$(date -d "-$((TODAY_DOW - 1)) days" +%Y-%m-%d)
-
-if $THIS_WEEK; then
-    RANGE_MONDAY="$CURRENT_MONDAY"
+# -- date labels ---------------------------------------------------------------
+if [ -n "$DMIN" ] && [ -n "$DMAX" ]; then
+    DATE_START="$(date -d "$DMIN" '+%B %d, %Y')"
+    DATE_END="$(date -d "$DMAX" '+%B %d, %Y')"
 else
+    # fallback: previous full Monday-Sunday
+    TODAY_DOW=$(date +%u)
+    CURRENT_MONDAY=$(date -d "-$((TODAY_DOW - 1)) days" +%Y-%m-%d)
     RANGE_MONDAY=$(date -d "$CURRENT_MONDAY -7 days" +%Y-%m-%d)
+    RANGE_SUNDAY=$(date -d "$RANGE_MONDAY +6 days" +%Y-%m-%d)
+    DATE_START="$(date -d "$RANGE_MONDAY" '+%B %d, %Y')"
+    DATE_END="$(date -d "$RANGE_SUNDAY" '+%B %d, %Y')"
+    echo "  (no clip dates found -- using previous Mon-Sun)"
 fi
-RANGE_SUNDAY=$(date -d "$RANGE_MONDAY +6 days" +%Y-%m-%d)
-RANGE_LABEL="$(date -d "$RANGE_MONDAY" '+%b %-d') - $(date -d "$RANGE_SUNDAY" '+%b %-d, %Y')"
 
 REPS=$((END_COUNTER - START_COUNTER))
-SEG_TITLE="$(echo "${SEGMENT:0:1}" | tr '[:lower:]' '[:upper:]')${SEGMENT:1}"
+TITLE="${SEG_NAME} Progress (${START_COUNTER}-${END_COUNTER}) ${DATE_START} – ${DATE_END}"
+DESC="Welcome to another weekly breakdown of the ${SEG_NAME} Progress series! This log tracks ${FOCUS} from ${DATE_START} through ${DATE_END}. Follow along to see key metric updates, volume progression, and training insights for reps ${START_COUNTER} through ${END_COUNTER}."
 
 echo ""
 echo "Title:"
-echo "  ${SEG_TITLE} Progress (${START_COUNTER}-${END_COUNTER})"
+echo "  $TITLE"
 echo ""
 echo "Description:"
-echo "  A week of ${SEGMENT} training, ${RANGE_LABEL}. ${REPS} logged this"
-echo "  week -- every short from these sessions, bundled into one recap."
-echo "  Segment #${START_COUNTER} through #${END_COUNTER}."
+echo "  $DESC"
 echo ""
 
-# The deliverable: title + description as one clean block.
-CLIP_TEXT="${SEG_TITLE} Progress (${START_COUNTER}-${END_COUNTER})
-
-A week of ${SEGMENT} training, ${RANGE_LABEL}. ${REPS} logged this week -- every short from these sessions, bundled into one recap. Segment #${START_COUNTER} through #${END_COUNTER}."
-
-# Picked via dialog (widget flow): show the block in an editable dialog first
-# (numbers can be tweaked there); whatever is in the box on OK is what gets
-# copied to the clipboard.
-if $USED_PICKER && command -v termux-dialog >/dev/null 2>&1; then
-    __edited="$(termux-dialog text -t "Week Recap" -i "$CLIP_TEXT" | jq -r '.text // ""' 2>/dev/null)"
-    [ -n "$__edited" ] && CLIP_TEXT="$__edited"
-fi
-
+# -- sequential clipboard: title, pause to paste, then description ------------
 if command -v termux-clipboard-set >/dev/null 2>&1; then
-    printf '%s' "$CLIP_TEXT" | termux-clipboard-set
-    echo "(Copied title + description to clipboard)"
+    printf '%s' "$TITLE" | termux-clipboard-set
+    echo "(Title copied to clipboard)"
+    if command -v termux-dialog >/dev/null 2>&1; then
+        echo "  [waiting on dialog] Paste the title, then confirm for the description" >&2
+        __ans="$(termux-dialog confirm -t "Title copied" -i "Paste the title now, then tap Yes to copy the description." | jq -r '.text // ""' 2>/dev/null)"
+        case "${__ans,,}" in
+            yes)
+                printf '%s' "$DESC" | termux-clipboard-set
+                echo "(Description copied to clipboard)"
+                ;;
+            *)
+                echo "(Stopped after the title -- description not copied)"
+                ;;
+        esac
+    else
+        printf '%s' "$DESC" | termux-clipboard-set
+        echo "(Description copied to clipboard)"
+    fi
 fi
