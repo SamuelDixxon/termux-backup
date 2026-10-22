@@ -139,7 +139,10 @@ while IFS= read -r -d '' f; do
     LABEL="${LABEL_PREFIX} ${COUNTER}"
     base=$(basename "$f" | sed 's/\.[^.]*$//')
     ext="${f##*.}"
-    output="${TARGET_PATH}/${base}_labeled.${ext}"
+    # Numbered filename: <segment>_<NNNN>_<original base>_labeled.<ext>
+    # week-recap parses the episode number (and the date in the base) back
+    # out of the folder, so the folder itself is the recap's source of truth.
+    output="${TARGET_PATH}/${SEGMENT_NAME}_$(printf '%04d' "$COUNTER")_${base}_labeled.${ext}"
 
     echo "[$LABEL] $(basename "$f")"
     if _burn_thumb_core "$f" "$output" "$LABEL" "$DUR" "$TIMEOUT_SECS"; then

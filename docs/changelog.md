@@ -2,6 +2,7 @@
 
 | Version | Date | Component | Status | Summary |
 |---------|------|-----------|--------|---------|
+| v4.4.17 | 2026-10 | org-camera-album-burn, week-recap | new | Numbered burn filenames: <segment>_<NNNN>_<base>_labeled.<ext> (the number was already burned into the label; now it is in the name too). week-recap parses min/max episode numbers + dates straight from the folder -- no state file, no typed range -- with explicit args and the old auto mode as fallbacks |
 | v4.4.16 | 2026-10 | week-recap | rework | Matches the published format (Pistol Squat Progress (573-615) August 03, 2026 – August 16, 2026): date range now comes from the segment folder's oldest/newest clip dates (filename, then ffprobe creation_time, then mtime; Mon-Sun fallback); sequential clipboard -- title copied, dialog pause to paste, then description copied |
 | v4.4.15 | 2026-10 | week-recap | fix | Result (title + description) now copied to the clipboard via termux-clipboard-set. Picker runs still get the editable dialog first, and the edited text is what lands on the clipboard |
 | v4.4.14 | 2026-10 | week-recap | fix | When the segment is picked via dialog (widget flow), the result is also shown in a copyable dialog -- widget sessions can close before terminal output is readable |

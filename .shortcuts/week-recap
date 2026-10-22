@@ -17,10 +17,12 @@
 # creation_time, then file mtime). Falls back to the previous Mon-Sun
 # week if the folder has no datable clips.
 #
-# EPISODE RANGE:
+# EPISODE RANGE (first match wins):
 #   Explicit:  week-recap pistol 639 671   -> uses exactly those numbers.
-#   Auto:      week-recap pistol           -> start = counter saved at the
-#              last run (week_recap_state.json), end = current counter.
+#   Filenames: numbered burns (pistol_0639_..._labeled.mp4) -> min/max
+#              episode numbers parsed from the segment folder.
+#   Auto:      counter saved at the last run (week_recap_state.json) ->
+#              current counter.
 #
 # CLIPBOARD: title is copied first; a dialog pauses so you can paste it,
 # then the description is copied. Ready to paste into the upload form.
@@ -132,17 +134,6 @@ if not m:
 rec = m[0]
 name = rec['name']
 counter = rec.get('counter', 0)
-end = int(end_arg) if end_arg else counter
-if start_arg:
-    start = int(start_arg)
-else:
-    state = {}
-    if os.path.exists(state_path):
-        state = json.load(open(state_path))
-    start = state.get(name, end)
-    state[name] = end
-    os.makedirs(os.path.dirname(state_path), exist_ok=True)
-    json.dump(state, open(state_path, 'w'), indent=2)
 
 # display name: title-cased short_desc, last word singularized (squats->squat)
 words = (rec.get('short_desc') or name).split()
@@ -151,9 +142,12 @@ if disp.endswith('s') and len(disp.rsplit(' ', 1)[-1]) > 3:
     disp = disp[:-1]
 focus = rec.get('full_desc') or rec.get('short_desc') or name
 
-# clip dates from the segment folder: filename date, else ffprobe
-# creation_time, else mtime. Hidden dirs/files skipped, depth <= 2.
+# Scan the segment folder: episode numbers from numbered burn filenames
+# (<segment>_<NNNN>_..._labeled.<ext>) and clip dates (filename date, else
+# ffprobe creation_time, else mtime). Hidden dirs/files skipped, depth <= 2.
 dates = []
+num_dates = []
+nums = []
 src = os.path.join(shared, name)
 exts = ('.mp4', '.mov', '.3gp', '.webm', '.mkv')
 if os.path.isdir(src):
@@ -185,6 +179,29 @@ if os.path.isdir(src):
                     pass
             if dt:
                 dates.append(dt)
+                nm = re.match(re.escape(name) + r'_(\d+)_', f)
+                if nm:
+                    nums.append(int(nm.group(1)))
+                    num_dates.append(dt)
+
+# Episode range: explicit args > filename numbers > saved-state auto.
+if start_arg and end_arg:
+    start, end = int(start_arg), int(end_arg)
+elif nums:
+    start, end = min(nums), max(nums)
+else:
+    end = counter
+    state = {}
+    if os.path.exists(state_path):
+        state = json.load(open(state_path))
+    start = state.get(name, end)
+    state[name] = end
+    os.makedirs(os.path.dirname(state_path), exist_ok=True)
+    json.dump(state, open(state_path, 'w'), indent=2)
+
+# Dates pair with the numbered set when there is one.
+if num_dates:
+    dates = num_dates
 dmin = min(dates) if dates else ''
 dmax = max(dates) if dates else ''
 print('\t'.join([name, str(start), str(end), disp, focus, dmin, dmax]))
