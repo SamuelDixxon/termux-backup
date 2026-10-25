@@ -4,17 +4,17 @@ backup|batch-backup|1791852074|Zip content segment folders into Export/ (4 modes
 backup|merge-counters|1791852074|Auto-resolve segments_data.json conflicts: highest counter wins per segment
 backup|nightly-sync|1792368985|Scheduled sync round trip: sync-in then backup-all, with logging + failure alerts
 backup|schedule-sync|1792368985|Register nightly-sync with termux-job-scheduler (once-daily, WiFi + charging)
-backup|sync-in|1792368985|Pull the repo, mirror .shortcuts, update .bashrc if it differs
+backup|sync-in|1792379202|Pull the repo, mirror .shortcuts (counters merge max-wins), update .bashrc if it differs
 backup|transfer-export|1791852074|Copy Export/ to SD card (USB) or Raspberry Pi (rsync over SSH)
 content|pistol_squat_log.sh|1791852074|Log a pistol-squat session, copy the summary to clipboard
-content|week-recap|1791852074|Generate title + description for a week's shorts bundled as one upload
+content|week-recap|1792714139|Generate title + description for a week's shorts bundled as one upload
 media|burn_thumb.sh|1791852074|Burn a sequential text label onto a video's first frames (thumbnail labeling)
-media|org-camera-album-burn.sh|1791852074|Move Camera files into a segment folder and burn sequential thumbnails
+media|org-camera-album-burn.sh|1792714139|Move Camera files into a segment folder and burn sequential thumbnails
 media|org-camera-album|1791852074|Move all media out of DCIM/Camera into a new folder, rescan gallery
 media|org-media|1792368985|Move photos/videos from Camera, Edits, Muse, Screenshots...
-media|sandwich|1792368985|Stitch a segment folder's clips into one sequential reel
+media|sandwich|1792382120|Stitch a segment folder's clips into one sequential reel
 media|tapestry|1791852074|NxN grid of a segment's clips playing simultaneously
-media|video-utils.sh|1792369065|Shared ffmpeg helpers for tapestry/sandwich (library, not run directly)
+media|video-utils.sh|1792411352|Shared ffmpeg helpers for tapestry/sandwich (library, not run directly)
 pipeline|content-pipeline-segment-first|1791852074|Session-first pipeline: pick segment, copy hashtags, manage the counter
 pipeline|manager|1791852074|Hashtag manager (CRUD) for content segments
 pipeline|pipeline|1791852074|Post-shoot chain: org-camera-album -> backup-folder -> manager
