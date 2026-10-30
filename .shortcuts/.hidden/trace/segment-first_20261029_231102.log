@@ -1,0 +1,596 @@
++ [content-pipeline-segment-first:128] log '=== content-pipeline-segment-first starting ==='
+++ [content-pipeline-segment-first:120] date +%H:%M:%S
++ [content-pipeline-segment-first:120] echo '[23:11:02] === content-pipeline-segment-first starting ==='
++ [content-pipeline-segment-first:129] log 'Trace log: /data/data/com.termux/files/home/.shortcuts/.hidden/trace/segment-first_20261029_231102.log'
+[23:11:02] === content-pipeline-segment-first starting ===
+++ [content-pipeline-segment-first:120] date +%H:%M:%S
++ [content-pipeline-segment-first:120] echo '[23:11:02] Trace log: /data/data/com.termux/files/home/.shortcuts/.hidden/trace/segment-first_20261029_231102.log'
+[23:11:02] Trace log: /data/data/com.termux/files/home/.shortcuts/.hidden/trace/segment-first_20261029_231102.log
++ [content-pipeline-segment-first:132] source /data/data/com.termux/files/home/.bashrc
+++ [.bashrc:16] [[ hxB == *i* ]]
+++ [.bashrc:29] BURN_THUMB_SCRIPT=/data/data/com.termux/files/home/.shortcuts/burn_thumb.sh
+++ [.bashrc:30] '[' -f /data/data/com.termux/files/home/.shortcuts/burn_thumb.sh ']'
+++ [.bashrc:31] source /data/data/com.termux/files/home/.shortcuts/burn_thumb.sh
++++ [burn_thumb.sh:238] alias burnthumb=burn_thumb
++++ [burn_thumb.sh:374] alias burnthumbsegment=burn_thumb_segment
+++ [.bashrc:100] alias zb=z_backup
+++ [.bashrc:101] alias zr=z_restore
+++ [.bashrc:106] alias 'shared=cd $HOME/storage/shared'
+++ [.bashrc:107] alias 'dcim=cd $HOME/storage/shared/DCIM/Camera'
+++ [.bashrc:108] alias 'exp=cd $HOME/storage/shared/Export'
+++ [.bashrc:109] alias 'sc=cd $HOME/.shortcuts'
+++ [.bashrc:110] alias 'repo=cd $HOME/termux-backup'
+++ [.bashrc:111] alias '..=cd ..'
+++ [.bashrc:112] alias '...=cd ../..'
+++ [.bashrc:113] alias 'll=ls -lah'
+++ [.bashrc:114] alias 'ltr=ls -ltr'
+++ [.bashrc:115] alias 'lsize=ls -lhS'
+++ [.bashrc:116] alias 'ldirs=ls -d */'
+++ [.bashrc:117] alias 'lrecent=ls -lt | head'
+++ [.bashrc:122] alias 'rm=rm -i'
+++ [.bashrc:123] alias 'cp=cp -i'
+++ [.bashrc:124] alias 'mv=mv -i'
+++ [.bashrc:125] alias 'mkdir=mkdir -pv'
+++ [.bashrc:130] alias 'dfh=df -h'
+++ [.bashrc:131] alias 'dush=du -sh *'
+++ [.bashrc:132] alias 'duexp=du -sh $HOME/storage/shared/Export/*'
+++ [.bashrc:137] alias 'cpwd=pwd | termux-clipboard-set && echo "path copied"'
+++ [.bashrc:138] alias 'cpfile=termux-clipboard-set <'
+++ [.bashrc:139] alias clip=termux-clipboard-set
+++ [.bashrc:144] alias 'gs=git status'
+++ [.bashrc:145] alias 'gd=git diff'
+++ [.bashrc:146] alias 'gl=git log --oneline -10'
+++ [.bashrc:147] alias 'gp=git push origin main'
+++ [.bashrc:148] alias 'ga=git add -A'
+++ [.bashrc:149] alias 'gc=git commit -m'
+++ [.bashrc:150] alias 'gpull=git pull origin main'
+++ [.bashrc:151] alias 'glog=git log --oneline --graph --decorate -20'
+++ [.bashrc:156] alias 'bat=termux-battery-status | jq .'
+++ [.bashrc:157] alias 'myip=termux-wifi-connectioninfo | jq -r ".ip"'
+++ [.bashrc:158] alias 'ssid=termux-wifi-connectioninfo | jq -r ".ssid"'
+++ [.bashrc:159] alias 'rssi=termux-wifi-connectioninfo | jq -r ".rssi"'
+++ [.bashrc:164] alias 'pipeline=bash $HOME/.shortcuts/content-pipeline'
+++ [.bashrc:165] alias 'bb=bash $HOME/.shortcuts/batch-backup'
+++ [.bashrc:166] alias 'bball=bash $HOME/.shortcuts/batch-backup --all'
+++ [.bashrc:167] alias 'bbhot=bash $HOME/.shortcuts/batch-backup --hot'
+++ [.bashrc:168] alias 'bbunzipped=bash $HOME/.shortcuts/batch-backup --unzipped'
+++ [.bashrc:169] alias 'mgr=python3 $HOME/.shortcuts/.hidden/segment_manager.py'
+++ [.bashrc:170] alias 'quick=python3 $HOME/.shortcuts/.hidden/segment_manager.py --quick'
+++ [.bashrc:171] alias 'syncup=bash $HOME/.shortcuts/backup-all'
+++ [.bashrc:172] alias 'transfer=bash $HOME/.shortcuts/transfer-export'
+++ [.bashrc:173] alias 'tapestry=bash $HOME/.shortcuts/tapestry'
+++ [.bashrc:174] alias 'sandwich=bash $HOME/.shortcuts/sandwich'
+++ [.bashrc:182] alias 'stage1=bash $HOME/.shortcuts/org-camera-album'
+++ [.bashrc:183] alias 'stage1b=bash $HOME/.shortcuts/org-camera-album-burn.sh'
+++ [.bashrc:184] alias 'stage15grid=bash $HOME/.shortcuts/tapestry'
+++ [.bashrc:185] alias 'stage15reel=bash $HOME/.shortcuts/sandwich'
+++ [.bashrc:186] alias 'stage2=bash $HOME/.shortcuts/batch-backup'
+++ [.bashrc:187] alias 'stage2hot=bash $HOME/.shortcuts/batch-backup --hot'
+++ [.bashrc:188] alias 'stage3=bash $HOME/.shortcuts/backup-all'
+++ [.bashrc:189] alias 'stage4=python3 $HOME/.shortcuts/.hidden/segment_manager.py'
+++ [.bashrc:190] alias 'stage4quick=python3 $HOME/.shortcuts/.hidden/segment_manager.py --quick'
+++ [.bashrc:191] alias 'stage5=bash $HOME/.shortcuts/transfer-export'
+++ [.bashrc:256] alias regress=pipeline_regress
+++ [.bashrc:257] alias 'voice=bash $HOME/.shortcuts/voice-command'
+++ [.bashrc:258] alias 'socmgr=python3 $HOME/.shortcuts/.hidden/social-manager.py'
+++ [.bashrc:263] alias py=python3
+++ [.bashrc:264] alias 'jqp=jq . <'
+++ [.bashrc:265] alias 'ports=ss -tulnp'
+++ [.bashrc:266] alias 'psg=ps aux | grep'
+++ [.bashrc:267] alias 'bashreload=source ~/.bashrc && echo "bashrc reloaded"'
+++ [.bashrc:268] alias 'bashcheck=bash -n ~/.bashrc && echo "no syntax errors"'
+++ [.bashrc:297] alias segstat=seg_status
+++ [.bashrc:317] alias exsum=export_summary
+++ [.bashrc:344] alias segadd=seg_add
+++ [.bashrc:374] alias segset=seg_set_counter
+++ [.bashrc:399] alias segbump=seg_bump
+++ [.bashrc:428] alias mks=mkshot
+++ [.bashrc:592] alias mksb=mkshot_burn
+++ [.bashrc:622] alias pkgcheck=pkg_check
+++ [.bashrc:656] alias tinfo=termux_info
+++ [.bashrc:692] alias lsc=lsclip
+++ [.bashrc:693] alias 'lscs=lsclip --sizes'
+++ [.bashrc:753] alias dbf=debug_folder
+++ [.bashrc:811] alias gcempty=gc_empty
+++ [.bashrc:812] alias 'gcd=gc_empty --delete'
+++ [.bashrc:885] alias clean-termux=clean_termux
+++ [.bashrc:947] alias empty-gallery-trash=empty_gallery_trash
+++ [.bashrc:978] alias extractaudio=extract_audio
+++ [.bashrc:1001] alias probe=probe_media
+++ [.bashrc:1017] alias compvid=compress_vid
+++ [.bashrc:1030] alias waveform=waveform_img
+++ [.bashrc:1086] _generate_segment_aliases
+++ [.bashrc:1054] local DATA=/data/data/com.termux/files/home/.shortcuts/.hidden/segments_data.json
+++ [.bashrc:1055] local LIB=/data/data/com.termux/files/home/.shortcuts/.hidden/seg_alias.py
+++ [.bashrc:1056] '[' '!' -f /data/data/com.termux/files/home/.shortcuts/.hidden/segments_data.json ']'
+++ [.bashrc:1057] '[' '!' -f /data/data/com.termux/files/home/.shortcuts/.hidden/seg_alias.py ']'
+++ [.bashrc:1059] skipped=()
+++ [.bashrc:1059] local skipped
+++ [.bashrc:1060] declare -A seen_aliases
+++ [.bashrc:1062] IFS=$'\t'
++++ [.bashrc:1053] python3 /data/data/com.termux/files/home/.shortcuts/.hidden/seg_alias.py generate
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z climb ']'
+++ [.bashrc:1065] '[' -z climb ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t climb
+++ [.bashrc:1078] seen_aliases["$alias_name"]=climb
+++ [.bashrc:1079] alias 'climb=cd "$HOME/storage/shared/climb"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z skip ']'
+++ [.bashrc:1065] '[' -z skip ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t skip
+++ [.bashrc:1078] seen_aliases["$alias_name"]=skip
+++ [.bashrc:1079] alias 'skip=cd "$HOME/storage/shared/skip"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z piano ']'
+++ [.bashrc:1065] '[' -z piano ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t piano
+++ [.bashrc:1078] seen_aliases["$alias_name"]=piano
+++ [.bashrc:1079] alias 'piano=cd "$HOME/storage/shared/piano"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z m ']'
+++ [.bashrc:1065] '[' -z m ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t m
+++ [.bashrc:1078] seen_aliases["$alias_name"]=m
+++ [.bashrc:1079] alias 'm=cd "$HOME/storage/shared/m"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z skate ']'
+++ [.bashrc:1065] '[' -z skate ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t skate
+++ [.bashrc:1078] seen_aliases["$alias_name"]=skate
+++ [.bashrc:1079] alias 'skate=cd "$HOME/storage/shared/skate"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z code ']'
+++ [.bashrc:1065] '[' -z code ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t code
+++ [.bashrc:1078] seen_aliases["$alias_name"]=code
+++ [.bashrc:1079] alias 'code=cd "$HOME/storage/shared/code"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z 'book review' ']'
+++ [.bashrc:1065] '[' -z bkrvw ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t bkrvw
+++ [.bashrc:1078] seen_aliases["$alias_name"]='book review'
+++ [.bashrc:1079] alias 'bkrvw=cd "$HOME/storage/shared/book review"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z food ']'
+++ [.bashrc:1065] '[' -z food ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t food
+++ [.bashrc:1078] seen_aliases["$alias_name"]=food
+++ [.bashrc:1079] alias 'food=cd "$HOME/storage/shared/food"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z minecraft ']'
+++ [.bashrc:1065] '[' -z mncrf ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t mncrf
+++ [.bashrc:1078] seen_aliases["$alias_name"]=minecraft
+++ [.bashrc:1079] alias 'mncrf=cd "$HOME/storage/shared/minecraft"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z trixie ']'
+++ [.bashrc:1065] '[' -z trx ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t trx
+++ [.bashrc:1078] seen_aliases["$alias_name"]=trixie
+++ [.bashrc:1079] alias 'trx=cd "$HOME/storage/shared/trixie"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z tech ']'
+++ [.bashrc:1065] '[' -z tech ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t tech
+++ [.bashrc:1078] seen_aliases["$alias_name"]=tech
+++ [.bashrc:1079] alias 'tech=cd "$HOME/storage/shared/tech"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z 'dad q&a' ']'
+++ [.bashrc:1065] '[' -z dadqa ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t dadqa
+++ [.bashrc:1078] seen_aliases["$alias_name"]='dad q&a'
+++ [.bashrc:1079] alias 'dadqa=cd "$HOME/storage/shared/dad q&a"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z health ']'
+++ [.bashrc:1065] '[' -z hlth ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t hlth
+++ [.bashrc:1078] seen_aliases["$alias_name"]=health
+++ [.bashrc:1079] alias 'hlth=cd "$HOME/storage/shared/health"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z hike ']'
+++ [.bashrc:1065] '[' -z hike ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t hike
+++ [.bashrc:1078] seen_aliases["$alias_name"]=hike
+++ [.bashrc:1079] alias 'hike=cd "$HOME/storage/shared/hike"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z cisco ']'
+++ [.bashrc:1065] '[' -z cisco ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t cisco
+++ [.bashrc:1078] seen_aliases["$alias_name"]=cisco
+++ [.bashrc:1079] alias 'cisco=cd "$HOME/storage/shared/cisco"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z ball ']'
+++ [.bashrc:1065] '[' -z ball ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t ball
+++ [.bashrc:1078] seen_aliases["$alias_name"]=ball
+++ [.bashrc:1079] alias 'ball=cd "$HOME/storage/shared/ball"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z 'tea review' ']'
+++ [.bashrc:1065] '[' -z trvw ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t trvw
+++ [.bashrc:1078] seen_aliases["$alias_name"]='tea review'
+++ [.bashrc:1079] alias 'trvw=cd "$HOME/storage/shared/tea review"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z pistol ']'
+++ [.bashrc:1065] '[' -z pstl ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t pstl
+++ [.bashrc:1078] seen_aliases["$alias_name"]=pistol
+++ [.bashrc:1079] alias 'pstl=cd "$HOME/storage/shared/pistol"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z box ']'
+++ [.bashrc:1065] '[' -z box ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t box
+++ [.bashrc:1078] seen_aliases["$alias_name"]=box
+++ [.bashrc:1079] alias 'box=cd "$HOME/storage/shared/box"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z ski ']'
+++ [.bashrc:1065] '[' -z ski ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t ski
+++ [.bashrc:1078] seen_aliases["$alias_name"]=ski
+++ [.bashrc:1079] alias 'ski=cd "$HOME/storage/shared/ski"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z run ']'
+++ [.bashrc:1065] '[' -z run ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t run
+++ [.bashrc:1078] seen_aliases["$alias_name"]=run
+++ [.bashrc:1079] alias 'run=cd "$HOME/storage/shared/run"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z mcped ']'
+++ [.bashrc:1065] '[' -z mcped ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t mcped
+++ [.bashrc:1078] seen_aliases["$alias_name"]=mcped
+++ [.bashrc:1079] alias 'mcped=cd "$HOME/storage/shared/mcped"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z auto ']'
+++ [.bashrc:1065] '[' -z auto ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t auto
+++ [.bashrc:1078] seen_aliases["$alias_name"]=auto
+++ [.bashrc:1079] alias 'auto=cd "$HOME/storage/shared/auto"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z bake ']'
+++ [.bashrc:1065] '[' -z bake ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t bake
+++ [.bashrc:1078] seen_aliases["$alias_name"]=bake
+++ [.bashrc:1079] alias 'bake=cd "$HOME/storage/shared/bake"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z stands ']'
+++ [.bashrc:1065] '[' -z stnds ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t stnds
+++ [.bashrc:1078] seen_aliases["$alias_name"]=stands
+++ [.bashrc:1079] alias 'stnds=cd "$HOME/storage/shared/stands"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z game ']'
+++ [.bashrc:1065] '[' -z game ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t game
+++ [.bashrc:1078] seen_aliases["$alias_name"]=game
+++ [.bashrc:1079] alias 'game=cd "$HOME/storage/shared/game"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z integral ']'
+++ [.bashrc:1065] '[' -z intgr ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t intgr
+++ [.bashrc:1078] seen_aliases["$alias_name"]=integral
+++ [.bashrc:1079] alias 'intgr=cd "$HOME/storage/shared/integral"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z spanish ']'
+++ [.bashrc:1065] '[' -z spnsh ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t spnsh
+++ [.bashrc:1078] seen_aliases["$alias_name"]=spanish
+++ [.bashrc:1079] alias 'spnsh=cd "$HOME/storage/shared/spanish"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z timelapse ']'
+++ [.bashrc:1065] '[' -z tmlps ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t tmlps
+++ [.bashrc:1078] seen_aliases["$alias_name"]=timelapse
+++ [.bashrc:1079] alias 'tmlps=cd "$HOME/storage/shared/timelapse"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z grip ']'
+++ [.bashrc:1065] '[' -z grip ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t grip
+++ [.bashrc:1078] seen_aliases["$alias_name"]=grip
+++ [.bashrc:1079] alias 'grip=cd "$HOME/storage/shared/grip"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1063] '[' -z liftminecraft ']'
+++ [.bashrc:1065] '[' -z lftmn ']'
+++ [.bashrc:1069] '[' -n '' ']'
+++ [.bashrc:1073] type -t lftmn
+++ [.bashrc:1078] seen_aliases["$alias_name"]=liftminecraft
+++ [.bashrc:1079] alias 'lftmn=cd "$HOME/storage/shared/liftminecraft"'
+++ [.bashrc:1062] IFS=$'\t'
+++ [.bashrc:1062] read -r name alias_name
+++ [.bashrc:1082] '[' 0 -gt 0 ']'
+++ [.bashrc:1090] alias 'segaliases=python3 $HOME/.shortcuts/.hidden/seg_alias.py list'
+++ [.bashrc:1102] alias segaliasset=seg_alias_set
+++ [.bashrc:1107] alias 'export=cd /data/data/com.termux/files/home/storage/shared/Export'
+++ [.bashrc:1108] alias 'e=cd /data/data/com.termux/files/home/storage/shared/Export'
+++ [.bashrc:1109] alias 's=cd ~/.shortcuts && ls -ltr'
+++ [.bashrc:1110] alias 'cpfile=termux-clipboard-set <'
+++ [.bashrc:1119] case ":$PATH:" in
+++ [.bashrc:1121] export PATH=/data/data/com.termux/files/home/.shortcuts:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin:/product/bin:/apex/com.android.runtime/bin:/apex/com.android.art/bin:/apex/com.android.virt/bin:/system_ext/bin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin
+++ [.bashrc:1121] PATH=/data/data/com.termux/files/home/.shortcuts:/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin:/product/bin:/apex/com.android.runtime/bin:/apex/com.android.art/bin:/apex/com.android.virt/bin:/system_ext/bin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin
+++ [.bashrc:1131] [[ hxB == *i* ]]
++ [content-pipeline-segment-first:134] SESSION_FILE=/data/data/com.termux/files/home/.shortcuts/.hidden/session.json
++ [content-pipeline-segment-first:135] MANAGER=/data/data/com.termux/files/home/.shortcuts/.hidden/segment_manager.py
++ [content-pipeline-segment-first:136] DATA_FILE=/data/data/com.termux/files/home/.shortcuts/.hidden/segments_data.json
++ [content-pipeline-segment-first:141] echo ''
++ [content-pipeline-segment-first:142] echo '=== Step 1: segment_manager -- pick segment, copy hashtags ==='
++ [content-pipeline-segment-first:143] '[' '!' -f /data/data/com.termux/files/home/.shortcuts/.hidden/segment_manager.py ']'
+
+=== Step 1: segment_manager -- pick segment, copy hashtags ===
++ [content-pipeline-segment-first:152] '[' -e /dev/tty ']'
++ [content-pipeline-segment-first:153] python3 /data/data/com.termux/files/home/.shortcuts/.hidden/segment_manager.py
+[H[2J[3J
+[1m[36m====================================================[0m
+[1m[36m  SEGMENT MANAGER  v3[0m
+[1m[36m====================================================[0m
+  [90mSegments: 31  Hot: 6  Total posts: 1675[0m
+
+ [36m1.[0m  Search and Copy  [90m(hashtags to clipboard)[0m
+ [36m2.[0m  Quick Copy (hot)  [90m(hot segments, 1 input)[0m
+ [36m3.[0m  Add series
+ [36m4.[0m  Edit series  [90m(name / desc / hashtags / counter)[0m
+ [36m5.[0m  Delete series
+ [36m6.[0m  List all
+ [36m7.[0m  Bulk counter  [90m(mass upload -- set counter + copy)[0m
+ [36m8.[0m  Stats dashboard  [90m(distribution, velocity, law of large numbers)[0m
+ [36m9.[0m  Trend ideas  [90m(suggest new segments for growth)[0m
+ [36mq.[0m  Quit
+
+[90m> [0m[32mGoodbye![0m
+
++ [content-pipeline-segment-first:158] '[' '!' -f /data/data/com.termux/files/home/.shortcuts/.hidden/session.json ']'
+++ [content-pipeline-segment-first:171] python3 -c $'\nimport json\ntry:\n    print(json.load(open(\'/data/data/com.termux/files/home/.shortcuts/.hidden/session.json\')).get(\'segment\', \'\'))\nexcept Exception:\n    print(\'\')\n'
++ [content-pipeline-segment-first:171] SEGMENT=integral
++ [content-pipeline-segment-first:173] '[' -z integral ']'
++ [content-pipeline-segment-first:179] log 'Segment for this session: integral'
+++ [content-pipeline-segment-first:120] date +%H:%M:%S
++ [content-pipeline-segment-first:120] echo '[23:11:05] Segment for this session: integral'
++ [content-pipeline-segment-first:185] echo ''
++ [content-pipeline-segment-first:186] echo '=== Step 2: route DCIM/Camera -> segment (+ optional number) ==='
++ [content-pipeline-segment-first:188] SHARED=/data/data/com.termux/files/home/storage/shared
+[23:11:05] Segment for this session: integral
+
+=== Step 2: route DCIM/Camera -> segment (+ optional number) ===
+++ [content-pipeline-segment-first:198] python3 -c $'\nimport json\ntry:\n    d = json.load(open(\'/data/data/com.termux/files/home/.shortcuts/.hidden/segments_data.json\'))\n    match = [s for s in d[\'segments\'] if s[\'name\'] == \'integral\']\n    print(\'true\' if match and match[0].get(\'series_mode\') else \'false\')\nexcept Exception:\n    print(\'false\')\n'
++ [content-pipeline-segment-first:198] SERIES_MODE=false
+++ [content-pipeline-segment-first:211] python3 -c $'\nimport json\ntry:\n    print(json.load(open(\'/data/data/com.termux/files/home/.shortcuts/.hidden/session.json\')).get(\'counter\', \'\'))\nexcept Exception:\n    print(\'\')\n'
++ [content-pipeline-segment-first:211] COUNTER=39
++ [content-pipeline-segment-first:212] log 'series_mode=false session_counter='\''39'\'''
+++ [content-pipeline-segment-first:120] date +%H:%M:%S
++ [content-pipeline-segment-first:120] echo '[23:11:05] series_mode=false session_counter='\''39'\'''
++ [content-pipeline-segment-first:215] NUMBER=
++ [content-pipeline-segment-first:216] '[' -n 39 ']'
++ [content-pipeline-segment-first:217] '[' false = true ']'
++ [content-pipeline-segment-first:217] DEFAULT_APPEND=n
++ [content-pipeline-segment-first:218] read -rp 'Append session number to the folder name? (integral -> integral39) (y/n, default n): ' APPEND
+[23:11:05] series_mode=false session_counter='39'
+Append session number to the folder name? (integral -> integral39) (y/n, default n): + [content-pipeline-segment-first:219] APPEND=n
++ [content-pipeline-segment-first:220] '[' n = y ']'
++ [content-pipeline-segment-first:221] log 'DECISION append_number='\''n'\'' -> NUMBER='\''<none>'\'''
+++ [content-pipeline-segment-first:120] date +%H:%M:%S
++ [content-pipeline-segment-first:120] echo '[23:11:07] DECISION append_number='\''n'\'' -> NUMBER='\''<none>'\'''
+[23:11:07] DECISION append_number='n' -> NUMBER='<none>'
++ [content-pipeline-segment-first:233] '[' -n '' ']'
++ [content-pipeline-segment-first:233] FOLDER=integral
++ [content-pipeline-segment-first:234] log 'DECISION FOLDER='\''integral'\'' (routing target + backup folder + zip name basis)'
+++ [content-pipeline-segment-first:120] date +%H:%M:%S
++ [content-pipeline-segment-first:120] echo '[23:11:07] DECISION FOLDER='\''integral'\'' (routing target + backup folder + zip name basis)'
+[23:11:07] DECISION FOLDER='integral' (routing target + backup folder + zip name basis)
++ [content-pipeline-segment-first:236] '[' false = true ']'
++ [content-pipeline-segment-first:236] DEFAULT_BURN=y
++ [content-pipeline-segment-first:237] read -rp 'Burn thumbnail labels while routing? (y/n, default y): ' BURN_CHOICE
+Burn thumbnail labels while routing? (y/n, default y): + [content-pipeline-segment-first:238] BURN_CHOICE=y
++ [content-pipeline-segment-first:239] log 'DECISION burn='\''y'\'''
+++ [content-pipeline-segment-first:120] date +%H:%M:%S
++ [content-pipeline-segment-first:120] echo '[23:11:08] DECISION burn='\''y'\'''
+[23:11:08] DECISION burn='y'
++ [content-pipeline-segment-first:242] '[' y = y ']'
++ [content-pipeline-segment-first:243] type -t mkshot_burn
++ [content-pipeline-segment-first:252] SEG_DIR=/data/data/com.termux/files/home/storage/shared/integral
+++ [content-pipeline-segment-first:253] list_dir_names /data/data/com.termux/files/home/storage/shared/integral
+++ [content-pipeline-segment-first:123] '[' -d /data/data/com.termux/files/home/storage/shared/integral ']'
+++ [content-pipeline-segment-first:124] find /data/data/com.termux/files/home/storage/shared/integral -maxdepth 1 -mindepth 1 -printf '%f\n'
+++ [content-pipeline-segment-first:124] sort
++ [content-pipeline-segment-first:253] BEFORE_LIST=$'20261009_160126.jpg\n20261013_163431.jpg\nAISelect_20261013_164729_Chrome.jpg\nAISelect_20261027_201643_Chrome.jpg\nNotes_260928_230401_1.jpg\nNotes_260929_110023_1.jpg\nNotes_260929_110023_2.jpg\nNotes_261001_142550_1.jpg\nNotes_261001_142550_2.jpg\nNotes_261003_201053_1.jpg\nNotes_261003_201053_2.jpg\nNotes_261006_152443_1.jpg\nNotes_261006_152443_2.jpg\nNotes_261006_152443_3.jpg\nNotes_261006_152443_4.jpg\nNotes_261006_160931_1.jpg\nNotes_261007_135917_1.jpg\nNotes_261007_152212_1.jpg\nNotes_261008_151555_1.jpg\nNotes_261008_151555_2.jpg\nNotes_261008_151555_3.jpg\nNotes_261013_164615_1.jpg\nNotes_261013_165042_1.jpg\nNotes_261013_165247_1.jpg\nNotes_261013_165448_1.jpg\nNotes_261014_175040_1.jpg\nNotes_261014_181830_1.jpg\nNotes_261018_165220_1.jpg\nNotes_261018_165220_2.jpg\nNotes_261018_165220_3.jpg\nNotes_261018_165220_4.jpg\nNotes_261018_165220_5.jpg\nNotes_261019_095846_1.jpg\nNotes_261019_095846_2.jpg\nNotes_261020_172637_1.jpg\nNotes_261020_172637_2.jpg\nNotes_261021_162932_1.jpg\nNotes_261029_154137_1.jpg\nNotes_261029_154137_2.jpg\nNotes_261029_155528_1.jpg'
++ [content-pipeline-segment-first:254] log 'calling: mkshot_burn '\''integral'\'' (dest=/data/data/com.termux/files/home/storage/shared/integral)'
+++ [content-pipeline-segment-first:120] date +%H:%M:%S
++ [content-pipeline-segment-first:120] echo '[23:11:08] calling: mkshot_burn '\''integral'\'' (dest=/data/data/com.termux/files/home/storage/shared/integral)'
++ [content-pipeline-segment-first:255] mkshot_burn integral
++ [.bashrc:460] local name=integral
++ [.bashrc:461] shift
++ [.bashrc:462] local dur=3
++ [.bashrc:463] local first_only=false
++ [.bashrc:464] '[' 0 -gt 0 ']'
++ [.bashrc:473] local shared=/data/data/com.termux/files/home/storage/shared
+[23:11:08] calling: mkshot_burn 'integral' (dest=/data/data/com.termux/files/home/storage/shared/integral)
++ [.bashrc:474] local dcim=/data/data/com.termux/files/home/storage/shared/DCIM/Camera
++ [.bashrc:475] local dest=/data/data/com.termux/files/home/storage/shared/integral
++ [.bashrc:476] local DATA=/data/data/com.termux/files/home/.shortcuts/.hidden/segments_data.json
++ [.bashrc:477] local timeout_secs=600
++ [.bashrc:479] '[' -z integral ']'
++ [.bashrc:480] '[' '!' -f /data/data/com.termux/files/home/.shortcuts/.hidden/segments_data.json ']'
++ [.bashrc:482] local counter
+++ [.bashrc:488] python3 -c $'\nimport json\nd = json.load(open(\'/data/data/com.termux/files/home/.shortcuts/.hidden/segments_data.json\'))\nmatch = [s for s in d[\'segments\'] if s[\'name\'] == \'integral\']\nprint(match[0][\'counter\'] if match else -1)\n'
++ [.bashrc:488] counter=39
++ [.bashrc:489] '[' 39 = -1 ']'
++ [.bashrc:494] mkdir -p /data/data/com.termux/files/home/storage/shared/integral
++ [.bashrc:495] echo 'Created: /data/data/com.termux/files/home/storage/shared/integral'
++ [.bashrc:501] src_files=()
++ [.bashrc:501] local src_files
+Created: /data/data/com.termux/files/home/storage/shared/integral
++ [.bashrc:502] IFS=
++ [.bashrc:502] read -r -d '' f
+++ [.bashrc:459] find /data/data/com.termux/files/home/storage/shared/DCIM/Camera -maxdepth 1 -type f '!' -name '.*' -print0
+++ [.bashrc:459] sort -z
+find: ‘/data/data/com.termux/files/home/storage/shared/DCIM/Camera’: No such file or directory
++ [.bashrc:506] local count=0
++ [.bashrc:507] '[' 0 -eq 0 ']'
++ [.bashrc:508] echo 'DCIM/Camera is empty -- nothing to move or burn.'
++ [.bashrc:509] return 0
++ [content-pipeline-segment-first:256] '[' integral '!=' integral ']'
++ [content-pipeline-segment-first:295] log 'DECISION step 2 complete: folder='\''/data/data/com.termux/files/home/storage/shared/integral'\'''
+DCIM/Camera is empty -- nothing to move or burn.
+++ [content-pipeline-segment-first:120] date +%H:%M:%S
++ [content-pipeline-segment-first:120] echo '[23:11:08] DECISION step 2 complete: folder='\''/data/data/com.termux/files/home/storage/shared/integral'\'''
++ [content-pipeline-segment-first:296] log 'note: batch-backup resolves '\''integral'\'' via its Tier-2 '\''^integral[0-9]+$'\'' folder match; zip names derive from the folder'
+[23:11:08] DECISION step 2 complete: folder='/data/data/com.termux/files/home/storage/shared/integral'
+++ [content-pipeline-segment-first:120] date +%H:%M:%S
++ [content-pipeline-segment-first:120] echo '[23:11:08] note: batch-backup resolves '\''integral'\'' via its Tier-2 '\''^integral[0-9]+$'\'' folder match; zip names derive from the folder'
+[23:11:08] note: batch-backup resolves 'integral' via its Tier-2 '^integral[0-9]+$' folder match; zip names derive from the folder
++ [content-pipeline-segment-first:301] echo ''
++ [content-pipeline-segment-first:302] echo '=== Step 3: batch-backup ==='
+
++ [content-pipeline-segment-first:303] read -rp 'Backup mode -- y=hot (default) / c=custom / n=single folder: ' BACKUP_MODE
+=== Step 3: batch-backup ===
+Backup mode -- y=hot (default) / c=custom / n=single folder: + [content-pipeline-segment-first:304] BACKUP_MODE=y
++ [content-pipeline-segment-first:305] log 'DECISION backup_mode='\''y'\'''
+++ [content-pipeline-segment-first:120] date +%H:%M:%S
++ [content-pipeline-segment-first:120] echo '[23:11:11] DECISION backup_mode='\''y'\'''
+[23:11:11] DECISION backup_mode='y'
++ [content-pipeline-segment-first:307] case "${BACKUP_MODE,,}" in
++ [content-pipeline-segment-first:323] bash /data/data/com.termux/files/home/.shortcuts/batch-backup --hot
+[H[2J[3J[1m
+  +==========================================+
+  |        BATCH BACKUP  v3                  |
+  +==========================================+
+[0m
+[90m  Thursday Oct 29, 2026  11:11 PM[0m
+[90m  Mode: --hot  |  Targets: 5 folder(s)[0m
+[90m  Threshold: counter >= 50 = hot[0m
+
+[90m  Folders queued:[0m
+    [36m.[0m ball
+    [36m.[0m climb
+    [36m.[0m game
+    [36m.[0m pistol
+    [36m.[0m skip
+
+
+[90m  Processing: ball[0m
+! SKIPPED: 'ball' is empty
+
+[90m  Processing: climb[0m
+OK climb -> Export/climb_20261029-2311.zip (982M)
+
+[90m  Processing: game[0m
+! SKIPPED: 'game' is empty
+
+[90m  Processing: pistol[0m
+OK pistol -> Export/pistol_20261029-2311.zip (3.1G)
+
+[90m  Processing: skip[0m
+OK skip -> Export/skip_20261029-2321.zip (660M)
+
+
+[1m[36m-- Summary [0m
+  [32mv Succeeded: 5[0m
+
+[1m[36m-- Parity report [0m
+  [33m[1mUnbacked (folder exists, no zip):[0m
+    [33m->[0m [90mball (78x)[0m
+    [33m->[0m [90mgame (53x)[0m
+    [33m->[0m [90mbox (49x)[0m
+    [33m->[0m [90mintegral (39x)[0m
+    [33m->[0m [90mmcped (24x)[0m
+    [33m->[0m [90mgrip (23x)[0m
+    [33m->[0m [90mskate (18x)[0m
+    [33m->[0m [90mpiano (9x)[0m
+    [33m->[0m [90mauto (9x)[0m
+    [33m->[0m [90mcode (8x)[0m
+    [33m->[0m [90mminecraft (5x)[0m
+    [33m->[0m [90mfood (4x)[0m
+    [33m->[0m [90mrun (4x)[0m
+    [33m->[0m [90mspanish (2x)[0m
+
+  [90mSegment not on this device:[0m
+    [90m. m (165x)[0m
+    [90m. stands (26x)[0m
+    [90m. book review (24x)[0m
+    [90m. hike (12x)[0m
+    [90m. trixie (11x)[0m
+    [90m. tea review (9x)[0m
+    [90m. ski (8x)[0m
+    [90m. cisco (7x)[0m
+    [90m. tech (6x)[0m
+    [90m. dad q&a (6x)[0m
+    [90m. health (3x)[0m
+    [90m. liftminecraft (3x)[0m
+    [90m. bake (2x)[0m
+    [90m. timelapse (1x)[0m
+
+  [32mBacked up:[0m [90mpistol climb skip[0m
+
+
+[1m[32m
+  +==========================================+
+  |   v  5 operation(s) complete           |
+  +==========================================+
+[0m
++ [content-pipeline-segment-first:330] echo ''
+
++ [content-pipeline-segment-first:331] echo '=== Step 4: backup-all ==='
+=== Step 4: backup-all ===
++ [content-pipeline-segment-first:332] bash /data/data/com.termux/files/home/.shortcuts/backup-all
+[23:25:02] Device: SM-F766U
+[23:25:02] Repo:   /data/data/com.termux/files/home/termux-backup
+[23:25:02] Syncing .shortcuts/ ...
