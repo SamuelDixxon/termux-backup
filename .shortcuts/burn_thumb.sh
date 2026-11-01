@@ -115,10 +115,16 @@ _burn_thumb_core() {
     # that counted as success). One obvious path, verified by exit code
     # AND output existence. Slower; correct. (dur stays in the signature
     # so existing callers keep working; the window above replaced it.)
+    # Output is forced to 8-bit yuv420p (2026-11-01): ffmpeg 8's 10-bit
+    # x264 passes 10-bit inputs straight through, and phone hardware
+    # decoders cannot play 10-bit H.264 (High 10 profile) -- the file
+    # decodes in software but the phone's player refuses it. 8-bit
+    # High profile plays everywhere; the depth loss is invisible for
+    # phone clips YouTube re-encodes anyway.
     echo "    burning \"$label\" onto $(basename "$input")... (timeout ${timeout_secs}s)"
     "${FF[@]}" -nostdin -i "$input" \
         -vf "$drawtext_vf" \
-        -c:v libx264 -preset veryfast -crf 22 \
+        -c:v libx264 -preset veryfast -crf 22 -pix_fmt yuv420p \
         -c:a copy \
         -movflags +faststart \
         -stats -loglevel error \
