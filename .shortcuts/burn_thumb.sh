@@ -18,10 +18,16 @@
 #     constant fraction of the picture on 720p, 1080p, 4K, ... -- a fixed
 #     pixel size looks different on every resolution (2026-09-29 fix)
 #   - bold black outline instead of drop shadow (outline also height-relative)
-#   - label on frames 0-2 only (~0.1s, fps-independent): nearly subliminal;
-#     frame 0 (the thumbnail frame) is always labeled (2026-10-11)
-#   - fast path: re-encode only the head (~1s, veryfast preset), stream-copy
-#     the rest, concat -- a 60s clip costs ~1s of encoding (2026-10-11)
+#   - label on the first 0.1s of display time: nearly subliminal;
+#     frame 0 (the thumbnail frame) is always labeled (2026-10-11;
+#     time window since 2026-11-01 -- the old frame-count window
+#     scattered across display positions under B-frames)
+#   - single path: full re-encode, veryfast preset (2026-11-01). The old
+#     head-encode + stream-copy + concat fast path is gone: it saved
+#     encoding time but carried silent-failure modes; correctness first
+#   - label via textfile, not a quoted text='...' value: ffmpeg 8
+#     silently renders nothing when the quoted value contains a space
+#     (2026-11-01 -- "Pistol 697" drew nothing, "Pistol697" worked)
 #
 # EDUCATIONAL CONCEPT:
 #   drawtext filter = real-time video compositing.
@@ -61,10 +67,7 @@ _burn_thumb_core() {
     [ -z "$FFPROBE" ] && FFPROBE="/data/data/com.termux/files/usr/bin/ffprobe"
 
     # Standardized label sizing (2026-09-29): probe the frame height and size
-    # the font as a fraction of it, instead of a fixed pixel value. A fixed
-    # fontsize=120 is 1/6 of a 720p frame but 1/18 of a 4K frame, so the label
-    # visibly shrank/grew whenever a clip's resolution differed (e.g. a clip
-    # re-exported from an editor at a different timeline resolution).
+    # the font as a fraction of it, instead of a fixed pixel value.
     local vid_h
     vid_h=$("$FFPROBE" -v error -select_streams v:0 \
         -show_entries stream=height -of csv=p=0 "$input" 2>/dev/null | tr -d '[:space:]')
@@ -79,11 +82,21 @@ _burn_thumb_core() {
         echo "    (could not probe frame height -- falling back to fontsize=120, borderw=6)"
     fi
 
-    # Label window (2026-10-11): frames 0-2 only, fps-independent (~0.1s at
-    # 30fps). Nearly subliminal on playback; frame 0 -- the thumbnail frame
-    # -- is always labeled. NOTE: the old --dur / between(t,0,dur) window is
-    # retired; dur stays in the signature so existing callers keep working.
-    local drawtext_vf="drawtext=text='$label':fontfile='$font_path':fontsize=${fontsize}:fontcolor=white:borderw=${borderw}:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2:enable='lte(n,2)'"
+    # Label delivery (2026-11-01): the label goes through a textfile, NOT
+    # a quoted text='...' value. ffmpeg 8 silently renders NOTHING when
+    # the quoted text value contains a space ("Pistol 697" drew nothing,
+    # "Pistol697" worked, exit code 0 either way) -- a quoted label is a
+    # silent-failure trap. A textfile is literal: any label text, spaces
+    # included, renders exactly.
+    local label_file
+    label_file=$(mktemp)
+    printf '%s' "$label" > "$label_file"
+
+    # Label window (2026-11-01): first 0.1s of DISPLAY time. The old
+    # frames-0-2 window counted frames in decode order, which B-frames
+    # scatter across display positions; a time window always covers the
+    # thumbnail frame. Still nearly subliminal on playback.
+    local drawtext_vf="drawtext=textfile='$label_file':fontfile='$font_path':fontsize=${fontsize}:fontcolor=white:borderw=${borderw}:bordercolor=black:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t,0,0.1)'"
 
     # ffmpeg launcher array: timeout when available (hang protection)
     local TIMEOUT_BIN
@@ -95,75 +108,14 @@ _burn_thumb_core() {
     local ffmpeg_log
     ffmpeg_log=$(mktemp)
 
-    # --- fast path: head-only re-encode (2026-10-11) -------------------------
-    # Re-encode just the head (up to the first keyframe >= 1s) carrying the
-    # label; stream-copy the tail; concat via mpegts. A 60s clip costs ~1s of
-    # encoding instead of 60s. Any failure falls back to the full re-encode.
-    local dur_int kf_time=""
-    dur_int=$("$FFPROBE" -v error -show_entries format=duration \
-        -of csv=p=0 "$input" 2>/dev/null | tr -d '[:space:]')
-    dur_int=${dur_int%%.*}
-    if [[ "$dur_int" =~ ^[0-9]+$ ]] && [ "$dur_int" -ge 2 ]; then
-        # ffprobe 8 renamed the frame timestamp field: pkt_pts_time returns
-        # empty (verified on ffprobe 8.1.2), pts_time is the replacement.
-        # Empty probe output used to silently disable the fast path and
-        # force a full re-encode of every clip, so try the new name first
-        # and fall back to the old one for pre-8 ffprobe.
-        kf_list=$("$FFPROBE" -v error -skip_frame nokey -select_streams v:0 \
-            -show_entries frame=pts_time -of csv=p=0 "$input" 2>/dev/null | grep -E '[0-9]' || true)
-        [ -z "$kf_list" ] && kf_list=$("$FFPROBE" -v error -skip_frame nokey -select_streams v:0 \
-            -show_entries frame=pkt_pts_time -of csv=p=0 "$input" 2>/dev/null | grep -E '[0-9]' || true)
-        while IFS= read -r line; do
-            line=$(printf '%s' "$line" | tr -d '[:space:]')
-            line=${line##*,}
-            [[ "$line" =~ ^[0-9]+(\.[0-9]+)?$ ]] || continue
-            if [ "${line%%.*}" -ge 1 ]; then kf_time="$line"; break; fi
-        done <<< "$kf_list"
-        [ -z "$kf_time" ] && echo "    (no keyframe times from ffprobe -- fast path unavailable, full re-encode)"
-    fi
-
-    if [ -n "$kf_time" ]; then
-        echo "    fast path: encoding head (0-${kf_time}s), stream-copying the rest"
-        local tmpdir head_ts tail_ts ok=1
-        tmpdir=$(mktemp -d) || ok=0
-        head_ts="$tmpdir/head.ts"; tail_ts="$tmpdir/tail.ts"
-        if [ $ok -eq 1 ]; then
-            "${FF[@]}" -nostdin -i "$input" -t "$kf_time" \
-                -vf "$drawtext_vf" \
-                -c:v libx264 -preset veryfast -crf 22 \
-                -c:a aac -ar 48000 -ac 2 \
-                -stats -loglevel error \
-                "$head_ts" -y < /dev/null 2>&1 | tee "$ffmpeg_log"
-            [ "${PIPESTATUS[0]}" -eq 0 ] || ok=0
-        fi
-        if [ $ok -eq 1 ]; then
-            "${FF[@]}" -nostdin -ss "$kf_time" -i "$input" \
-                -c:v copy -c:a aac -ar 48000 -ac 2 \
-                -stats -loglevel error \
-                "$tail_ts" -y < /dev/null 2>&1 | tee "$ffmpeg_log"
-            [ "${PIPESTATUS[0]}" -eq 0 ] || ok=0
-        fi
-        if [ $ok -eq 1 ]; then
-            "${FF[@]}" -nostdin -i "concat:$head_ts|$tail_ts" \
-                -c copy -movflags +faststart \
-                -stats -loglevel error \
-                "$output" -y < /dev/null 2>&1 | tee "$ffmpeg_log"
-            [ "${PIPESTATUS[0]}" -eq 0 ] || ok=0
-        fi
-        rm -rf "$tmpdir"
-        if [ $ok -eq 1 ] && [ -f "$output" ]; then
-            echo "    OK (fast path)"
-            rm -f "$ffmpeg_log"
-            return 0
-        fi
-        echo "    fast path failed -- falling back to full re-encode"
-    fi
-
-    # --- legacy path: full re-encode ------------------------------------------
-    # Short clips (<2s) or probe failures land here. Same nearly-invisible
-    # label window; veryfast preset (upload intermediates -- YouTube
-    # re-encodes anyway, so the quality trade is nearly free).
-    echo "    encoding $(basename "$input")... (timeout ${timeout_secs}s, progress below)"
+    # Single path (2026-11-01): full re-encode, no fast path. The old
+    # head-encode + stream-copy + concat fast path saved ~1min/clip but
+    # carried two silent-failure modes (ffprobe field renames killed the
+    # keyframe probe; a failed step could still leave a partial output
+    # that counted as success). One obvious path, verified by exit code
+    # AND output existence. Slower; correct. (dur stays in the signature
+    # so existing callers keep working; the window above replaced it.)
+    echo "    burning \"$label\" onto $(basename "$input")... (timeout ${timeout_secs}s)"
     "${FF[@]}" -nostdin -i "$input" \
         -vf "$drawtext_vf" \
         -c:v libx264 -preset veryfast -crf 22 \
@@ -172,8 +124,10 @@ _burn_thumb_core() {
         -stats -loglevel error \
         "$output" -y < /dev/null 2>&1 | tee "$ffmpeg_log"
     local ffmpeg_exit=${PIPESTATUS[0]}
+    rm -f "$label_file"
 
-    if [ -f "$output" ]; then
+    if [ "$ffmpeg_exit" -eq 0 ] && [ -f "$output" ]; then
+        echo "    OK"
         rm -f "$ffmpeg_log"
         return 0
     elif [ "$ffmpeg_exit" -eq 124 ]; then
