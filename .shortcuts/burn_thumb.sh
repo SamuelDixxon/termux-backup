@@ -104,13 +104,22 @@ _burn_thumb_core() {
         -of csv=p=0 "$input" 2>/dev/null | tr -d '[:space:]')
     dur_int=${dur_int%%.*}
     if [[ "$dur_int" =~ ^[0-9]+$ ]] && [ "$dur_int" -ge 2 ]; then
+        # ffprobe 8 renamed the frame timestamp field: pkt_pts_time returns
+        # empty (verified on ffprobe 8.1.2), pts_time is the replacement.
+        # Empty probe output used to silently disable the fast path and
+        # force a full re-encode of every clip, so try the new name first
+        # and fall back to the old one for pre-8 ffprobe.
+        kf_list=$("$FFPROBE" -v error -skip_frame nokey -select_streams v:0 \
+            -show_entries frame=pts_time -of csv=p=0 "$input" 2>/dev/null | grep -E '[0-9]' || true)
+        [ -z "$kf_list" ] && kf_list=$("$FFPROBE" -v error -skip_frame nokey -select_streams v:0 \
+            -show_entries frame=pkt_pts_time -of csv=p=0 "$input" 2>/dev/null | grep -E '[0-9]' || true)
         while IFS= read -r line; do
             line=$(printf '%s' "$line" | tr -d '[:space:]')
             line=${line##*,}
             [[ "$line" =~ ^[0-9]+(\.[0-9]+)?$ ]] || continue
             if [ "${line%%.*}" -ge 1 ]; then kf_time="$line"; break; fi
-        done < <("$FFPROBE" -v error -skip_frame nokey -select_streams v:0 \
-            -show_entries frame=pkt_pts_time -of csv=p=0 "$input" 2>/dev/null)
+        done <<< "$kf_list"
+        [ -z "$kf_time" ] && echo "    (no keyframe times from ffprobe -- fast path unavailable, full re-encode)"
     fi
 
     if [ -n "$kf_time" ]; then
