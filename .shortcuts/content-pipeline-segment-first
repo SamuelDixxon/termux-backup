@@ -53,15 +53,9 @@
 #   segments_data.json (passing "m155" would fail that lookup) -- the files
 #   this run routed are relocated into the numbered folder afterwards.
 #
-# TRACE / OBSERVABILITY:
-#   Every run appends to ~/.shortcuts/.hidden/trace/segment-first_<ts>.log:
-#   the full `set -x` execution trace (directed via BASH_XTRACEFD, so the
-#   terminal stays clean), a timestamped DECISION log of every naming
-#   choice, and the complete stdout of all steps. When a folder comes out
-#   wrong, start here:
-#       grep -n "DECISION" <trace>   # the naming decisions, in order
-#       tail -60 <trace>             # what happened at the end
-#   Only the newest 20 traces are kept.
+# No trace files (v4.4.22): runs used to capture a full execution trace to
+# ~/.shortcuts/.hidden/trace/segment-first_<ts>.log. Removed per request;
+# decisions still print on the console via log().
 #
 # VERIFIED against real source (2026-09-23, no longer "assumption flagged"):
 #   - mkshot / mkshot_burn in .bashrc (arg handling, counter lookup by $1)
@@ -104,19 +98,6 @@ if [ -z "$HOME" ]; then
 fi
 export PATH="/data/data/com.termux/files/usr/bin:$PATH"
 
-# ---------------------------------------------------------------------------
-# Trace / observability setup -- before set -x so the whole run is captured.
-# See the TRACE header note above for how to read the log.
-# ---------------------------------------------------------------------------
-TRACE_DIR="$HOME/.shortcuts/.hidden/trace"
-mkdir -p "$TRACE_DIR" 2>/dev/null
-TRACE_LOG="$TRACE_DIR/segment-first_$(date +%Y%m%d_%H%M%S).log"
-# Bound the trace dir: newest 20 survive.
-ls -t "$TRACE_DIR"/segment-first_*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
-exec 19>>"$TRACE_LOG"                    # fd 19 = trace file
-export BASH_XTRACEFD=19                  # `set -x` output goes here, not the terminal
-export PS4='+ [${BASH_SOURCE##*/}:${LINENO}] '
-exec > >(tee -a "$TRACE_LOG") 2>&1       # all stdout/stderr -> console AND trace
 log() { echo "[$(date +%H:%M:%S)] $*"; } # timestamped decision/info lines
 # list_dir_names <dir> : sorted basenames, one per line; silent empty if missing
 list_dir_names() {
@@ -124,9 +105,7 @@ list_dir_names() {
     find "$1" -maxdepth 1 -mindepth 1 -printf '%f\n' 2>/dev/null | sort
 }
 
-set -x
 log "=== content-pipeline-segment-first starting ==="
-log "Trace log: $TRACE_LOG"
 
 # mkshot / mkshot_burn live in .bashrc, not standalone scripts.
 source "$HOME/.bashrc" 2>/dev/null || true
@@ -142,7 +121,6 @@ echo ""
 echo "=== Step 1: segment_manager -- pick segment, copy hashtags ==="
 if [ ! -f "$MANAGER" ]; then
     log "x segment_manager.py not found: $MANAGER"
-    log "Trace: $TRACE_LOG"
     exit 1
 fi
 
@@ -158,7 +136,6 @@ fi
 if [ ! -f "$SESSION_FILE" ]; then
     log "x session.json not found after segment_manager -- did you pick a segment"
     log "  and exit normally (option 1/2/7, not Ctrl+C or 'q' without picking)?"
-    log "Trace: $TRACE_LOG"
     exit 1
 fi
 
@@ -172,7 +149,6 @@ except Exception:
 
 if [ -z "$SEGMENT" ]; then
     log "x Could not read a segment name from session.json"
-    log "Trace: $TRACE_LOG"
     exit 1
 fi
 
@@ -242,7 +218,6 @@ log "DECISION burn='${BURN_CHOICE}'"
 if [ "${BURN_CHOICE,,}" = "y" ]; then
     if ! type -t mkshot_burn >/dev/null 2>&1; then
         log "x mkshot_burn function not found -- check .bashrc sourced correctly"
-        log "Trace: $TRACE_LOG"
         exit 1
     fi
     # mkshot_burn MUST receive the bare segment: it looks up the live
@@ -282,7 +257,6 @@ if [ "${BURN_CHOICE,,}" = "y" ]; then
 else
     if ! type -t mkshot >/dev/null 2>&1; then
         log "x mkshot function not found -- check .bashrc sourced correctly"
-        log "Trace: $TRACE_LOG"
         exit 1
     fi
     # mkshot takes the folder name as $1 and does no segment lookup --
@@ -340,4 +314,3 @@ bash "$HOME/.shortcuts/transfer-export"
 
 echo ""
 log "OK Pipeline complete: segment='$SEGMENT' folder='$FOLDER'"
-log "Trace: $TRACE_LOG"

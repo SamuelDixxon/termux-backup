@@ -33,13 +33,12 @@
 #   org-media --source downloads --older-than 7 --dry-run
 #   org-media --source edits --type videos --match final
 #
-# Safety: never overwrites (existing names are skipped and reported), writes
-# a move manifest per run to .hidden/org-media-manifests/ (undo fuel).
+# Safety: never overwrites (existing names are skipped and reported).
+# No per-run log files (v4.4.22): moves are summarized on the console only.
 # =============================================================================
 
 SHARED="$HOME/storage/shared"
 HIDDEN="$HOME/.shortcuts/.hidden"
-MANIFEST_DIR="$HIDDEN/org-media-manifests"
 
 
 # --- dialog helpers: announce the popup before blocking on it ---------------
@@ -106,7 +105,6 @@ for _cmd in termux-dialog jq; do
 done
 unset _cmd
 
-mkdir -p "$MANIFEST_DIR"
 
 # --- source resolution -------------------------------------------------------
 resolve_source() {
@@ -346,12 +344,7 @@ if [ "$PURE_DEFAULT" -eq 0 ] && [ "$YES" -eq 0 ]; then
 fi
 
 # --- move --------------------------------------------------------------------
-mkdir -p "$DEST_PATH" "$MANIFEST_DIR" || { echo "x cannot create $DEST_PATH"; exit 1; }
-MANIFEST="$MANIFEST_DIR/org-media-$(date +%Y%m%d-%H%M%S).log"
-{
-    echo "# org-media run $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "# sources: ${SRC_KEYS[*]}"
-} > "$MANIFEST"
+mkdir -p "$DEST_PATH" || { echo "x cannot create $DEST_PATH"; exit 1; }
 
 moved=0; skipped=0
 for f in "${FILES[@]}"; do
@@ -361,7 +354,6 @@ for f in "${FILES[@]}"; do
         continue
     fi
     if mv "$f" "$DEST_PATH/"; then
-        printf '%s\t%s\n' "$f" "$DEST_PATH/$base" >> "$MANIFEST"
         moved=$((moved + 1))
     fi
 done
@@ -372,5 +364,4 @@ for sp in "${SRC_PATHS[@]}"; do termux-media-scan -r "$sp" 2>/dev/null; done
 echo "--------------------------------------------------------"
 echo "OK moved $moved file(s) -> $DEST_PATH"
 [ "$skipped" -gt 0 ] && echo "! skipped $skipped (name already exists in destination)"
-echo "Manifest: $MANIFEST"
 echo "--------------------------------------------------------"
