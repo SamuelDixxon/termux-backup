@@ -1123,14 +1123,18 @@ esac
 
 
 # =============================================================================
-# TOOLS BANNER -- what have we built?
+# TOOLS -- render the tool inventory on demand
 # =============================================================================
-# On login, show the tool count and anything new since the last session.
-# `tools` renders the full grouped inventory; every script self-describes
-# via # SUMMARY: / # GROUP: header lines. Interactive shells only.
-if [[ $- == *i* ]] && [ -x "$HOME/.shortcuts/tools" ]; then
-    "$HOME/.shortcuts/tools" --banner
-fi
+# `tools` prints the grouped inventory (every script self-describes via
+# # SUMMARY: / # GROUP: header lines). No startup banner, no seen-cache:
+# the old --banner mode tracked mtimes in .tools_seen, which lived inside
+# the mirrored ~/.shortcuts tree, so sync-in/backup-all kept resetting it
+# and the banner showed phantom NEW/UPD noise (or nothing at all when the
+# script lost its exec bit, since the banner only ran if the script was
+# executable). The alias runs the renderer through bash, so it works
+# even when the script is not executable. Shell startup shows fastfetch
+# only; run `tools` when you want the inventory.
+alias tools='bash "$HOME/.shortcuts/tools"'
 
 
 # =============================================================================
