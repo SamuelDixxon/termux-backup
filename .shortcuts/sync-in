@@ -31,6 +31,21 @@ echo "🔄 Mirroring Backup to System (Deleting junk)..."
 # rsync is the best tool for this. If not installed: pkg install rsync
 # This makes ~/.shortcuts EXACTLY match ~/termux-backup/.shortcuts
 rsync -rtv --delete "$D/.shortcuts/" "$S/"
+# Restore exec bits on the mirrored tool scripts (v4.4.23): repo blobs
+# ship 100644 and rsync without -p does not preserve permissions, so
+# scripts mirrored by sync-in arrive non-executable. That silently
+# breaks anything that runs a script directly -- Termux:Widget taps and
+# the nightly-sync job (schedule-sync refuses to register a
+# non-executable script, and the job service cannot run one). Aliases
+# that invoke scripts via `bash` are unaffected, which is why this went
+# unnoticed. Skips *.md docs; .hidden/ is untouched (not top-level files).
+for _f in "$S"/*; do
+    case "$_f" in
+        *.md) ;;
+        *) [ -f "$_f" ] && chmod +x "$_f" ;;
+    esac
+done
+unset _f
 
 # 3. Merge counters (max-wins): no counter ever goes backwards.
 # The rsync above just overwrote the live counters file with the repo copy;
