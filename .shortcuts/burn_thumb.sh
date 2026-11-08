@@ -158,7 +158,7 @@ _burn_thumb_core() {
 burn_thumb() {
     local input="$1"
     shift
-    local label="" dur=0.25
+    local label="" dur=0.25 seg="" count=""
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -175,7 +175,6 @@ burn_thumb() {
     if [ -z "$label" ]; then
         local SESSION="$HOME/.shortcuts/.hidden/session.json"
         if [ -f "$SESSION" ]; then
-            local seg count
             seg=$(python3 -c "import json; d=json.load(open('$SESSION')); print(d.get('segment',''))")
             count=$(python3 -c "import json; d=json.load(open('$SESSION')); print(d.get('counter',''))")
             [ -n "$seg" ] && label="$(echo "${seg:0:1}" | tr '[:lower:]' '[:upper:]')${seg:1} $count"
@@ -189,7 +188,18 @@ burn_thumb() {
     dir=$(dirname "$input")
     base=$(basename "$input" | sed 's/\.[^.]*$//')
     ext="${input##*.}"
+    # Numbered filename (v4.4.24): when the session provides a segment +
+    # counter, write the episode # into the name -- same
+    # <segment>_<NNNN>_<base>_labeled.<ext> format as org-camera-album-burn.
+    # Only when the numbered name is free; if it already exists (that
+    # episode was already burned), fall back to the plain name so nothing
+    # is ever overwritten. Free-text --label burns have no segment, so
+    # they keep the plain name.
     output="${dir}/${base}_labeled.${ext}"
+    if [ -n "$seg" ] && [[ "$count" =~ ^[0-9]+$ ]]; then
+        local numbered="${dir}/$(echo "$seg" | tr '[:upper:]' '[:lower:]')_$(printf '%04d' "$count")_${base}_labeled.${ext}"
+        [ ! -e "$numbered" ] && output="$numbered"
+    fi
 
     echo "Burning label: '$label' onto first ${dur}s of video"
     echo "Output: $output"
@@ -227,8 +237,8 @@ alias burnthumb='burn_thumb'
 # re-incrementing the counter and overwriting outputs each time.
 #
 # --mode copy       (default) leaves originals untouched, writes
-#                    "<name>_labeled.ext" next to each -- matches current
-#                    single-file behavior, safest / most reversible.
+#                    "<segment>_<NNNN>_<name>_labeled.ext" next to each
+#                    (numbered, v4.4.24) -- safest / most reversible.
 # --mode newfolder   writes labeled copies into <folder>/upload_ready/,
 #                    originals untouched. Good staging area for upload.
 # --mode overwrite   labels in place (writes to a temp file, then mv's over
@@ -301,7 +311,11 @@ print(match[0]['counter'] if match else -1)
         case "$mode" in
             overwrite) output="${f}.tmp.${ext}" ;;
             newfolder) output="${outdir}/${base}.${ext}" ;;
-            *)         output="${folder}/${base}_labeled.${ext}" ;;
+            # Numbered filename (v4.4.24): same <segment>_<NNNN>_<base>_labeled
+            # format as org-camera-album-burn -- the counter is right here,
+            # so the episode # goes in the name. newfolder keeps its bare
+            # staging name and overwrite is in-place by definition.
+            *)         output="${folder}/${segment}_$(printf '%04d' "$counter")_${base}_labeled.${ext}" ;;
         esac
 
         echo "  [$label] $(basename "$f")"

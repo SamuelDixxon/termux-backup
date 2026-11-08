@@ -1,0 +1,301 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Reclaim phone storage: report per-segment sizes, auto-delete stale burned originals, pick labeled files to remove
+# GROUP: backup
+# =============================================================================
+# clean-storage  v4.4.24
+# =============================================================================
+# PURPOSE:
+#   Storage cleanup for the clip workflow, decoupled from backup-all (which
+#   needs the git repo + network, so its built-in purge only ran when a
+#   backup ran -- and backups have not run since Nov 3, so originals piled
+#   up). Run it on demand from the widget or a terminal; no git, no network.
+#
+# WHAT IT DOES (in order):
+#   1. Report: per-segment labeled + .burned_originals counts and sizes,
+#      plus overall totals, biggest segments first.
+#   2. Originals: auto-delete files in <segment>/.burned_originals/ older
+#      than ORIG_RETENTION_DAYS (7, the same rule backup-all used) -- the
+#      labeled copy is what gets zipped to Export/, so the original is
+#      redundant insurance past this window. Emptied dirs are dropped.
+#      This matches backup-all's old behavior: no prompt, it just does it.
+#   3. Labeled (interactive only): a pick-list of labeled files older than
+#      LABELED_DAYS (30) -- oldest first, capped at PICK_MAX (50) -- shown
+#      with the segment # parsed from the filename
+#      (<segment>_<NNNN>_<base>_labeled.<ext>). Only the files you pick
+#      are deleted. Never automatic.
+#
+# MODES:
+#   clean-storage                interactive: report + originals + labeled pick
+#   clean-storage --auto         non-interactive: totals + originals only; no
+#                                dialogs, no labeled deletion. This is what
+#                                backup-all calls.
+#   clean-storage --dry-run      report + show what WOULD be deleted; delete
+#                                nothing. Works with --auto too.
+#   clean-storage --older-than N labeled candidates older than N days (default 30)
+#   clean-storage --help
+#
+# SAFETY:
+#   - Scope is ~/storage/shared segment folders only (maxdepth 1 for
+#     labeled files; .burned_originals dirs maxdepth 3). Export/, .hidden/
+#     and anything else is never touched.
+#   - Labeled files are deleted ONLY when explicitly picked in the dialog
+#     (or typed by number at the fallback prompt). --auto never deletes them.
+#   - --dry-run deletes nothing; use it to preview any run.
+# =============================================================================
+
+SHARED="$HOME/storage/shared"
+ORIG_RETENTION_DAYS=7
+LABELED_DAYS=30
+PICK_MAX=50
+
+AUTO=0
+DRY_RUN=0
+
+# -- Helpers -------------------------------------------------------------------
+log()  { echo "[$(date '+%H:%M:%S')] $*"; }
+ok()   { echo -e "\033[32mv\033[0m $*"; }
+fail() { echo -e "\033[31mx\033[0m $*"; }
+warn() { echo -e "\033[33m!\033[0m $*"; }
+
+human() { numfmt --to=iec "$1" 2>/dev/null || echo "${1} bytes"; }
+
+usage() {
+    echo "Usage: clean-storage [--auto] [--dry-run] [--older-than N] [--help]"
+    echo "  (no flags)   report + stale originals + labeled pick-list"
+    echo "  --auto       totals + stale originals only (no dialogs, no labeled deletes)"
+    echo "  --dry-run    report + show what would be deleted; delete nothing"
+    echo "  --older-than N  labeled candidates older than N days (default $LABELED_DAYS)"
+    exit 0
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --auto)       AUTO=1; shift ;;
+        --dry-run)    DRY_RUN=1; shift ;;
+        --older-than) LABELED_DAYS="$2"; shift 2 ;;
+        --help|-h)    usage ;;
+        *)            echo "Unknown option: $1"; usage ;;
+    esac
+done
+
+[ "$DRY_RUN" = "1" ] && log "DRY RUN -- nothing will be deleted"
+
+if [ ! -d "$SHARED" ]; then
+    fail "shared storage not found at $SHARED"
+    echo "  If storage is not set up, run: termux-setup-storage"
+    exit 1
+fi
+
+# -- Segment folders -----------------------------------------------------------
+# Direct subdirs of shared storage, excluding hidden dirs and Export/
+# (the bball zip destination -- not a segment).
+SEGMENTS=()
+while IFS= read -r -d '' d; do
+    base=$(basename "$d")
+    case "$base" in
+        .*|Export) continue ;;
+    esac
+    SEGMENTS+=("$d")
+done < <(find "$SHARED" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+
+if [ "${#SEGMENTS[@]}" -eq 0 ]; then
+    log "No segment folders found under $SHARED"
+    exit 0
+fi
+
+# -- Report: per-segment labeled + originals -----------------------------------
+# Columns in the temp table: total_bytes|labeled_n|labeled_bytes|orig_n|orig_bytes|segment
+REPORT_TMP=$(mktemp)
+TOT_LABELED_N=0; TOT_LABELED_B=0; TOT_ORIG_N=0; TOT_ORIG_B=0
+for d in "${SEGMENTS[@]}"; do
+    seg=$(basename "$d")
+    lab_n=0; lab_b=0
+    while IFS= read -r -d '' f; do
+        sz=$(stat -c '%s' "$f" 2>/dev/null || echo 0)
+        lab_b=$((lab_b + sz)); lab_n=$((lab_n + 1))
+    done < <(find "$d" -maxdepth 1 -type f \( -iname '*_labeled.mp4' -o -iname '*_labeled.mov' -o -iname '*_labeled.3gp' -o -iname '*_labeled.webm' -o -iname '*_labeled.mkv' \) -print0 2>/dev/null)
+    orig_n=0; orig_b=0
+    if [ -d "$d/.burned_originals" ]; then
+        while IFS= read -r -d '' f; do
+            sz=$(stat -c '%s' "$f" 2>/dev/null || echo 0)
+            orig_b=$((orig_b + sz)); orig_n=$((orig_n + 1))
+        done < <(find "$d/.burned_originals" -type f -print0 2>/dev/null)
+    fi
+    TOT_LABELED_N=$((TOT_LABELED_N + lab_n)); TOT_LABELED_B=$((TOT_LABELED_B + lab_b))
+    TOT_ORIG_N=$((TOT_ORIG_N + orig_n)); TOT_ORIG_B=$((TOT_ORIG_B + orig_b))
+    echo "$((lab_b + orig_b))|$lab_n|$lab_b|$orig_n|$orig_b|$seg" >> "$REPORT_TMP"
+done
+
+TOT_B=$((TOT_LABELED_B + TOT_ORIG_B))
+if [ "$AUTO" = "1" ]; then
+    log "Storage: $TOT_LABELED_N labeled ($(human "$TOT_LABELED_B")) + $TOT_ORIG_N originals ($(human "$TOT_ORIG_B")) = $(human "$TOT_B") total"
+else
+    echo "Segment storage (labeled + originals, biggest first):"
+    printf '  %-14s %8s %10s %8s %10s %10s\n' "segment" "lab#" "lab size" "orig#" "orig size" "total"
+    while IFS='|' read -r tot lab_n lab_b orig_n orig_b seg; do
+        printf '  %-14s %8s %10s %8s %10s %10s\n' "$seg" "$lab_n" "$(human "$lab_b")" "$orig_n" "$(human "$orig_b")" "$(human "$tot")"
+    done < <(sort -t'|' -k1,1nr "$REPORT_TMP")
+    echo "  Total: $TOT_LABELED_N labeled ($(human "$TOT_LABELED_B")) + $TOT_ORIG_N originals ($(human "$TOT_ORIG_B")) = $(human "$TOT_B")"
+fi
+rm -f "$REPORT_TMP"
+
+# -- Originals: auto-delete stale ones ------------------------------------------
+# Same rule backup-all used: files in .burned_originals/ older than
+# ORIG_RETENTION_DAYS are deleted; emptied dirs are dropped.
+purge_originals() {
+    local total_files=0 total_bytes=0 d f sz
+    local listed=0
+    while IFS= read -r -d '' d; do
+        while IFS= read -r -d '' f; do
+            sz=$(stat -c '%s' "$f" 2>/dev/null || echo 0)
+            total_bytes=$((total_bytes + sz))
+            total_files=$((total_files + 1))
+            if [ "$DRY_RUN" = "1" ]; then
+                if [ "$listed" -lt 20 ]; then
+                    echo "    would delete: $f ($(human "$sz"))"
+                    listed=$((listed + 1))
+                fi
+            else
+                rm -f "$f"
+            fi
+        done < <(find "$d" -type f -mtime +"$ORIG_RETENTION_DAYS" -print0 2>/dev/null)
+        [ "$DRY_RUN" = "0" ] && rmdir "$d" 2>/dev/null || true
+    done < <(find "$SHARED" -maxdepth 3 -type d -name '.burned_originals' -print0 2>/dev/null)
+    if [ "$total_files" -gt 0 ]; then
+        if [ "$DRY_RUN" = "1" ]; then
+            [ "$total_files" -gt 20 ] && echo "    ... and $((total_files - 20)) more"
+            log "Would purge $total_files stale burned original(s), freeing ~$(human "$total_bytes")"
+        else
+            ok "Purged $total_files stale burned original(s), freed ~$(human "$total_bytes")"
+        fi
+    else
+        log "No stale burned originals to purge"
+    fi
+}
+
+log "Purging stale burned originals (older than $ORIG_RETENTION_DAYS days)..."
+purge_originals
+
+# -- Labeled: pick-list (interactive only, never in --auto) ----------------------
+if [ "$AUTO" = "1" ]; then
+    log "Labeled pick skipped (auto mode -- labeled files are never auto-deleted)"
+    exit 0
+fi
+
+# Candidates: labeled files older than LABELED_DAYS, oldest first, capped.
+CAND_TMP=$(mktemp)
+for d in "${SEGMENTS[@]}"; do
+    while IFS= read -r -d '' f; do
+        mt=$(stat -c '%Y' "$f" 2>/dev/null || echo 0)
+        sz=$(stat -c '%s' "$f" 2>/dev/null || echo 0)
+        echo "$mt|$sz|$f" >> "$CAND_TMP"
+    done < <(find "$d" -maxdepth 1 -type f -mtime +"$LABELED_DAYS" \( -iname '*_labeled.mp4' -o -iname '*_labeled.mov' -o -iname '*_labeled.3gp' -o -iname '*_labeled.webm' -o -iname '*_labeled.mkv' \) -print0 2>/dev/null)
+done
+CAND_COUNT=$(wc -l < "$CAND_TMP" | tr -d ' ')
+if [ "$CAND_COUNT" = "0" ]; then
+    log "No labeled files older than $LABELED_DAYS days -- nothing to pick"
+    rm -f "$CAND_TMP"
+    exit 0
+fi
+[ "$CAND_COUNT" -gt "$PICK_MAX" ] && warn "Showing the $PICK_MAX oldest of $CAND_COUNT candidates -- re-run to see the next batch"
+
+# Build the numbered candidate arrays (oldest first).
+CAND_PATHS=(); CAND_LABELS=()
+i=0
+while IFS='|' read -r mt sz f; do
+    [ "$i" -ge "$PICK_MAX" ] && break
+    i=$((i + 1))
+    seg=$(basename "$(dirname "$f")")
+    base=$(basename "$f")
+    # Segment # from the filename: <segment>_<NNNN>_<base>_labeled.<ext>
+    ep=""
+    if [[ "$base" =~ ^([A-Za-z0-9_-]+)_([0-9]{4})_.*_labeled\. ]]; then
+        ep="#$((10#${BASH_REMATCH[2]}))"
+    fi
+    disp_date=$(date -d "@$mt" '+%Y-%m-%d' 2>/dev/null || echo "?")
+    # Label must not contain commas (comma separates checkbox values) --
+    # strip them from the basename and truncate for display.
+    shortbase=$(echo "$base" | tr -d ',' | cut -c1-40)
+    if [ -n "$ep" ]; then
+        label="$i. $seg $ep | $(human "$sz") | $disp_date | $shortbase"
+    else
+        label="$i. $seg (no #) | $(human "$sz") | $disp_date | $shortbase"
+    fi
+    CAND_PATHS+=("$f")
+    CAND_LABELS+=("$label")
+done < <(sort -t'|' -k1,1n "$CAND_TMP")
+rm -f "$CAND_TMP"
+
+if [ "$DRY_RUN" = "1" ]; then
+    echo "Labeled candidates (dry run -- nothing will be deleted):"
+    printf '  %s\n' "${CAND_LABELS[@]}"
+    exit 0
+fi
+
+# Pick via termux-dialog checkbox when available, else a typed prompt.
+PICKED=()
+if command -v termux-dialog >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    CHECKLIST=$(printf '%s,' "${CAND_LABELS[@]}" | sed 's/,$//')
+    SELECTED_JSON=$(termux-dialog checkbox -t "Pick labeled files to delete" -v "$CHECKLIST" 2>/dev/null)
+    DIALOG_CODE=$(echo "$SELECTED_JSON" | jq -r '.code // "-2"' 2>/dev/null)
+    if [ "$DIALOG_CODE" = "-2" ] || [ -z "$DIALOG_CODE" ]; then
+        log "Pick cancelled -- no labeled files deleted"
+        exit 0
+    fi
+    # Response shapes vary by termux-api / OneUI version (same three cases
+    # as batch-backup): .index "0,2,4", .values[].text, or .text "a,b".
+    # Labels start with "<n>. " so the leading number maps back to a file.
+    INDICES_RAW=$(echo "$SELECTED_JSON" | jq -r '.index // ""' 2>/dev/null)
+    VALUES_RAW=$(echo "$SELECTED_JSON" | jq -r 'if .values then .values[].text else empty end' 2>/dev/null)
+    TEXT_RAW=$(echo "$SELECTED_JSON" | jq -r '.text // ""' 2>/dev/null)
+    if [ -n "$INDICES_RAW" ] && [ "$INDICES_RAW" != "null" ]; then
+        IFS=',' read -ra IDX_ARR <<< "$INDICES_RAW"
+        for idx in "${IDX_ARR[@]}"; do
+            idx="${idx// /}"
+            if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -lt "${#CAND_PATHS[@]}" ]; then
+                PICKED+=("${CAND_PATHS[$idx]}")
+            fi
+        done
+    elif [ -n "$VALUES_RAW" ]; then
+        while IFS= read -r val; do
+            if [[ "$val" =~ ^([0-9]+)\. ]]; then
+                n=$((10#${BASH_REMATCH[1]}))
+                [ "$n" -ge 1 ] && [ "$n" -le "${#CAND_PATHS[@]}" ] && PICKED+=("${CAND_PATHS[$((n - 1))]}")
+            fi
+        done <<< "$VALUES_RAW"
+    elif [ -n "$TEXT_RAW" ] && [ "$TEXT_RAW" != "null" ]; then
+        IFS=',' read -ra TXT_ARR <<< "$TEXT_RAW"
+        for val in "${TXT_ARR[@]}"; do
+            if [[ "$val" =~ ^([0-9]+)\. ]]; then
+                n=$((10#${BASH_REMATCH[1]}))
+                [ "$n" -ge 1 ] && [ "$n" -le "${#CAND_PATHS[@]}" ] && PICKED+=("${CAND_PATHS[$((n - 1))]}")
+            fi
+        done
+    fi
+elif [ -t 0 ]; then
+    echo "Labeled candidates (oldest first -- type numbers to delete, empty = none):"
+    printf '  %s\n' "${CAND_LABELS[@]}"
+    read -rp "Delete which numbers (space-separated)? " REPLY
+    for n in $REPLY; do
+        if [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le "${#CAND_PATHS[@]}" ]; then
+            PICKED+=("${CAND_PATHS[$((n - 1))]}")
+        fi
+    done
+else
+    echo "Labeled candidates (no dialog and no terminal -- nothing deleted):"
+    printf '  %s\n' "${CAND_LABELS[@]}"
+    exit 0
+fi
+
+if [ "${#PICKED[@]}" -eq 0 ]; then
+    log "Nothing picked -- no labeled files deleted"
+    exit 0
+fi
+
+freed_b=0
+for f in "${PICKED[@]}"; do
+    sz=$(stat -c '%s' "$f" 2>/dev/null || echo 0)
+    freed_b=$((freed_b + sz))
+    rm -f "$f"
+done
+ok "Deleted ${#PICKED[@]} labeled file(s), freed ~$(human "$freed_b")"

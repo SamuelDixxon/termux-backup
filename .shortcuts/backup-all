@@ -6,14 +6,14 @@
 # =============================================================================
 # PURPOSE:
 #   Mirror ~/.shortcuts/ and ~/.bashrc into the termux-backup git repo,
-#   purge stale burned originals, then push to GitHub.
+#   clean storage via clean-storage --auto, then push to GitHub.
 #   Logs every run to sync_history_<device>.csv (per-device, so two phones
 #   never fight over the same log file).
 #
 # WHAT IT DOES:
 #   1. rsync ~/.shortcuts/ -> ~/termux-backup/.shortcuts/  (with --delete)
 #   2. cp ~/.bashrc -> ~/termux-backup/.bashrc
-#   3. Purge .burned_originals/ older than 7 days under ~/storage/shared
+#   3. clean-storage --auto (report + purge .burned_originals/ older than 7 days under ~/storage/shared; no labeled deletion)
 #   4. git add -A && git commit (if changes exist)
 #   5. git fetch + rebase onto origin/main (multi-device: another phone may
 #      have pushed since this one last synced -- v2 pushed blindly and died
@@ -62,14 +62,13 @@ DEVICE=$(getprop ro.product.model 2>/dev/null | tr -d ' ' || echo "unknown")
 # cross-device rebase conflicts. Each phone now logs to its own file.
 SYNC_LOG="$REPO/sync_history_${DEVICE}.csv"
 
-# Burned-originals purge: the burn entry points (burn_thumb.sh,
-# org-camera-album-burn.sh, mkshot_burn) stash pre-burn originals in hidden
-# <segment>/.burned_originals/ dirs. backup-all never mirrored them (it only
-# syncs ~/.shortcuts), so they accumulated forever. Originals older than
-# BURN_RETENTION_DAYS are deleted -- the labeled copies are what get zipped
-# to Export/, so the originals are redundant insurance past this window.
-BURN_ROOT="$HOME/storage/shared"
-BURN_RETENTION_DAYS=7
+# Storage cleanup lives in clean-storage (v4.4.24): the burn entry points
+# stash pre-burn originals in hidden <segment>/.burned_originals/ dirs.
+# backup-all never mirrored them (it only syncs ~/.shortcuts), so they
+# accumulated forever. clean-storage --auto purges originals older than 7
+# days (the labeled copies are what get zipped to Export/, so the originals
+# are redundant insurance past this window) -- one implementation, called
+# from here and runnable on its own from the widget.
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
 # -- Helpers -------------------------------------------------------------------
@@ -77,30 +76,6 @@ log()  { echo "[$(date '+%H:%M:%S')] $*"; }
 ok()   { echo -e "\033[32mv\033[0m $*"; }
 fail() { echo -e "\033[31mx\033[0m $*"; }
 warn() { echo -e "\033[33m!\033[0m $*"; }
-
-# Delete stale pre-burn originals. The burn scripts move originals into
-# hidden .burned_originals/ dirs inside each segment folder; nothing ever
-# cleaned them up. Only files older than BURN_RETENTION_DAYS are removed
-# (insurance window in case a burn needs redoing); emptied dirs are dropped.
-purge_burned_originals() {
-    [ -d "$BURN_ROOT" ] || return 0
-    local total_files=0 total_bytes=0 d f sz human
-    while IFS= read -r -d '' d; do
-        while IFS= read -r -d '' f; do
-            sz=$(stat -c '%s' "$f" 2>/dev/null || echo 0)
-            total_bytes=$((total_bytes + sz))
-            total_files=$((total_files + 1))
-            rm -f "$f"
-        done < <(find "$d" -type f -mtime +"$BURN_RETENTION_DAYS" -print0 2>/dev/null)
-        rmdir "$d" 2>/dev/null || true
-    done < <(find "$BURN_ROOT" -maxdepth 3 -type d -name '.burned_originals' -print0 2>/dev/null)
-    if [ "$total_files" -gt 0 ]; then
-        human=$(numfmt --to=iec "$total_bytes" 2>/dev/null || echo "${total_bytes} bytes")
-        ok "Purged $total_files stale burned original(s), freed ~$human"
-    else
-        log "No stale burned originals to purge"
-    fi
-}
 
 # -- Ensure repo exists --------------------------------------------------------
 if [ ! -d "$REPO/.git" ]; then
@@ -127,10 +102,16 @@ if [ -f "$HOME/.bashrc" ]; then
     ok ".bashrc copied"
 fi
 
-# -- Step 3: Purge stale .burned_originals -------------------------------------
-# Local-only cleanup; runs even if the push below fails.
-log "Purging stale burned originals (older than $BURN_RETENTION_DAYS days)..."
-purge_burned_originals
+# -- Step 3: Storage cleanup (clean-storage --auto) ----------------------------
+# Local-only cleanup; runs even if the push below fails. --auto purges stale
+# burned originals only -- it never deletes labeled files and never prompts.
+if command -v clean-storage >/dev/null 2>&1; then
+    clean-storage --auto
+elif [ -x "$HOME/.shortcuts/clean-storage" ]; then
+    "$HOME/.shortcuts/clean-storage" --auto
+else
+    warn "clean-storage not found -- skipping storage cleanup this run"
+fi
 
 # -- Step 4: Ensure per-device sync log exists with header ---------------------
 if [ ! -f "$SYNC_LOG" ]; then
