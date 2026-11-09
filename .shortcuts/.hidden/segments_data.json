@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 276,
+      "counter": 280,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -17,7 +17,7 @@
       "name": "skip",
       "short_desc": "jumprope workout",
       "full_desc": "jumprope",
-      "counter": 103,
+      "counter": 108,
       "hashtags": [
         "#jumprope",
         "#skip",
@@ -41,7 +41,7 @@
       "name": "m",
       "short_desc": "ppl workout",
       "full_desc": "general workout push pull legs split",
-      "counter": 168,
+      "counter": 169,
       "hashtags": [
         "#pushpulllegs",
         "#workout",
@@ -357,7 +357,7 @@
       "name": "integral",
       "short_desc": "practice solving integrals at integral.com",
       "full_desc": "integral practice post college and learning techniques",
-      "counter": 39,
+      "counter": 40,
       "hashtags": [
         "#integral",
         "#math",
