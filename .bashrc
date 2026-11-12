@@ -1104,7 +1104,6 @@ alias segaliasset='seg_alias_set'
 # =============================================================================
 # LEGACY ALIASES (kept for compatibility)
 # =============================================================================
-alias export='cd /data/data/com.termux/files/home/storage/shared/Export'
 alias e='cd /data/data/com.termux/files/home/storage/shared/Export'
 alias s='cd ~/.shortcuts && ls -ltr'
 alias cpfile='termux-clipboard-set <'
