@@ -1,4 +1,4 @@
-# SUMMARY: Move all media out of DCIM/Camera into a new folder, rescan gallery
+# SUMMARY: Move all media out of Camera + Edits into a new folder, rescan gallery
 # GROUP: media
 ble debugging for troubleshooting
 set -x 
@@ -8,16 +8,23 @@ set -x
 # The shared storage root path where the new folder will be created.
 SHARED_STORAGE_ROOT="$HOME/storage/shared"
 
-# The source path (where photos/videos are currently).
-SOURCE_PATH="$SHARED_STORAGE_ROOT/DCIM/Camera" 
+# The source paths (where photos/videos are currently). Camera plus the
+# Edits export folder -- same resolution order as org-media
+# (Movies/Edits first). A source is swept only if it exists.
+SOURCES=()
+[ -d "$SHARED_STORAGE_ROOT/DCIM/Camera" ] && SOURCES+=("$SHARED_STORAGE_ROOT/DCIM/Camera")
+for _edits in "$SHARED_STORAGE_ROOT/Movies/Edits" "$SHARED_STORAGE_ROOT/Edits" "$SHARED_STORAGE_ROOT/edits" "$SHARED_STORAGE_ROOT/DCIM/Edits"; do
+  if [ -d "$_edits" ]; then SOURCES+=("$_edits"); break; fi
+done
+unset _edits
 
 # Define common media extensions to search for.
 MEDIA_EXTENSIONS="*.mp4 *.mov *.3gp *.webm *.mkv *.jpg *.jpeg *.png"
 
 # --- Prerequisites Check ---
 
-if [ ! -d "$SOURCE_PATH" ]; then
-  echo "Error: Source directory '$SOURCE_PATH' not found or inaccessible."
+if [ "${#SOURCES[@]}" -eq 0 ]; then
+  echo "Error: No source directory found (looked for DCIM/Camera and an Edits folder)."
   echo "ACTION REQUIRED: Please run 'termux-setup-storage' and grant permissions."
   set +x 
   exit 1
@@ -51,16 +58,32 @@ fi
 
 echo "SUCCESS: Directory '$TARGET_PATH' created."
 
-# 3. Move files using find and xargs
-echo "Searching for files in: $SOURCE_PATH"
-find "$SOURCE_PATH" -maxdepth 1 -type f \( -name "*.mp4" -o -name "*.mov" -o -name "*.3gp" -o -name "*.webm" -o -name "*.mkv" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" \) -print0 | xargs -0 mv -t "$TARGET_PATH"
+# 3. Move files from each source, one file at a time. Never overwrites:
+#    a file whose name already exists in the target is skipped and
+#    reported (same rule as org-media) -- two sources can hold the same
+#    basename, and a bulk mv would silently overwrite one with the other.
+moved=0; skipped=0
+for SOURCE_PATH in "${SOURCES[@]}"; do
+  echo "Searching for files in: $SOURCE_PATH"
+  while IFS= read -r -d '' f; do
+    if [ -e "$TARGET_PATH/$(basename "$f")" ]; then
+      echo "! skipping $(basename "$f") (already in $TARGET_PATH)"
+      skipped=$((skipped + 1))
+      continue
+    fi
+    mv "$f" "$TARGET_PATH/" && moved=$((moved + 1))
+  done < <(find "$SOURCE_PATH" -maxdepth 1 -type f \( -name "*.mp4" -o -name "*.mov" -o -name "*.3gp" -o -name "*.webm" -o -name "*.mkv" -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" \) -print0)
+done
+echo "Moved $moved file(s), skipped $skipped (already in target)."
 
 # --- Gallery Refresh Step ---
 echo "Moving files complete. Now refreshing the Android Media Gallery..."
 
 # 4. Scan both folders to ensure the Gallery is updated.
 termux-media-scan -r "$TARGET_PATH"  # Make new files appear
-termux-media-scan -r "$SOURCE_PATH"  # Make moved files disappear from original spot
+for SOURCE_PATH in "${SOURCES[@]}"; do
+  termux-media-scan -r "$SOURCE_PATH"  # Make moved files disappear from original spot
+done
 
 # 5. Final Confirmation
 echo "--------------------------------------------------------"

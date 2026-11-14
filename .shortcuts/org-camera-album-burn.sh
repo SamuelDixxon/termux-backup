@@ -1,12 +1,14 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# SUMMARY: Move Camera files into a segment folder and burn sequential thumbnails
+# SUMMARY: Move Camera + Edits files into a segment folder and burn sequential thumbnails
 # GROUP: media
 # =============================================================================
 # ORG-CAMERA-ALBUM-BURN
 # =============================================================================
-# Same "move everything out of DCIM/Camera" pattern as org-camera-album,
-# but targeted at an existing content segment instead of an arbitrary new
-# folder name: moves the files into <segment>/, then burns a sequential
+# Same "move everything out of the camera album" pattern as
+# org-camera-album, but targeted at an existing content segment instead
+# of an arbitrary new folder name: sweeps DCIM/Camera plus the Edits
+# export folder (same resolution order as org-media: Movies/Edits
+# first), moves the files into <segment>/, then burns a sequential
 # thumbnail onto each clip using segments_data.json's LIVE counter,
 # updating that counter in place as it goes.
 #
@@ -28,7 +30,15 @@ set -x
 
 # --- Configuration & Path Setup ---
 SHARED_STORAGE_ROOT="$HOME/storage/shared"
-SOURCE_PATH="$SHARED_STORAGE_ROOT/DCIM/Camera"
+# Sources: DCIM/Camera plus the Edits export folder -- same resolution
+# order as org-media (Movies/Edits first). A source is swept only if it
+# exists, so a phone without an Edits folder behaves exactly as before.
+SOURCES=()
+[ -d "$SHARED_STORAGE_ROOT/DCIM/Camera" ] && SOURCES+=("$SHARED_STORAGE_ROOT/DCIM/Camera")
+for _edits in "$SHARED_STORAGE_ROOT/Movies/Edits" "$SHARED_STORAGE_ROOT/Edits" "$SHARED_STORAGE_ROOT/edits" "$SHARED_STORAGE_ROOT/DCIM/Edits"; do
+  if [ -d "$_edits" ]; then SOURCES+=("$_edits"); break; fi
+done
+unset _edits
 DATA_FILE="$HOME/.shortcuts/.hidden/segments_data.json"
 DUR=3
 # Overridable via environment since this script takes no CLI args (it's
@@ -47,8 +57,8 @@ else
 fi
 
 # --- Prerequisites Check ---
-if [ ! -d "$SOURCE_PATH" ]; then
-  echo "Error: Source directory '$SOURCE_PATH' not found or inaccessible."
+if [ "${#SOURCES[@]}" -eq 0 ]; then
+  echo "Error: No source directory found (looked for DCIM/Camera and an Edits folder)."
   echo "ACTION REQUIRED: Please run 'termux-setup-storage' and grant permissions."
   set +x
   exit 1
@@ -108,17 +118,34 @@ fi
 
 echo "SUCCESS: Directory '$TARGET_PATH' created."
 
-# 2. Move video files using find and xargs. (Stills excluded here on purpose
-#    -- burn_thumb_core is a video-only ffmpeg pass. If you want photos
-#    routed into the segment folder too without labeling, tell me and I'll
-#    split this into a move-all + burn-videos-only two-pass instead.)
-echo "Searching for files in: $SOURCE_PATH"
-find "$SOURCE_PATH" -maxdepth 1 -type f ! -name '.*' \( -iname "*.mp4" -o -iname "*.mov" -o -iname "*.3gp" -o -iname "*.webm" -o -iname "*.mkv" \) -print0 | xargs -0 mv -t "$TARGET_PATH"
+# 2. Move video files from each source, one file at a time. (Stills
+#    excluded here on purpose -- burn_thumb_core is a video-only ffmpeg
+#    pass. If you want photos routed into the segment folder too without
+#    labeling, tell me and I'll split this into a move-all +
+#    burn-videos-only two-pass instead.) Never overwrites: a file whose
+#    name already exists in the target is skipped and reported (same rule
+#    as org-media) -- two sources can hold the same basename, and a bulk
+#    mv would silently overwrite one with the other.
+moved=0; skipped=0
+for SOURCE_PATH in "${SOURCES[@]}"; do
+  echo "Searching for files in: $SOURCE_PATH"
+  while IFS= read -r -d '' f; do
+    if [ -e "$TARGET_PATH/$(basename "$f")" ]; then
+      echo "! skipping $(basename "$f") (already in $TARGET_PATH)"
+      skipped=$((skipped + 1))
+      continue
+    fi
+    mv "$f" "$TARGET_PATH/" && moved=$((moved + 1))
+  done < <(find "$SOURCE_PATH" -maxdepth 1 -type f ! -name '.*' \( -iname "*.mp4" -o -iname "*.mov" -o -iname "*.3gp" -o -iname "*.webm" -o -iname "*.mkv" \) -print0)
+done
+echo "Moved $moved file(s), skipped $skipped (already in target)."
 
 # --- Gallery Refresh Step ---
 echo "Moving files complete. Now refreshing the Android Media Gallery..."
 termux-media-scan -r "$TARGET_PATH"
-termux-media-scan -r "$SOURCE_PATH"
+for SOURCE_PATH in "${SOURCES[@]}"; do
+  termux-media-scan -r "$SOURCE_PATH"
+done
 
 # --- Burn stage ---
 LABEL_PREFIX="$(echo "${SEGMENT_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${SEGMENT_NAME:1}"
