@@ -2,7 +2,7 @@
 # SUMMARY: Reclaim phone storage: report per-segment sizes, auto-delete stale burned originals, pick labeled files to remove
 # GROUP: backup
 # =============================================================================
-# clean-storage  v4.4.24
+# clean-storage  v4.4.27
 # =============================================================================
 # PURPOSE:
 #   Storage cleanup for the clip workflow, decoupled from backup-all (which
@@ -26,6 +26,7 @@
 #
 # MODES:
 #   clean-storage                interactive: report + originals + labeled pick
+#   clean-storage <segment> ...  same, limited to the named segment folder(s)
 #   clean-storage --auto         non-interactive: totals + originals only; no
 #                                dialogs, no labeled deletion. This is what
 #                                backup-all calls.
@@ -43,13 +44,20 @@
 #   - --dry-run deletes nothing; use it to preview any run.
 # =============================================================================
 
-SHARED="$HOME/storage/shared"
+# ~/storage/shared is a SYMLINK on Termux (termux-setup-storage points it at
+# /storage/emulated/0), and GNU find does not descend into a symlinked
+# starting point -- the discovery find below returned zero dirs on the phone
+# until this was resolved (v4.4.27). Resolve once so every find here works.
+# (The v4.4.24 VM test missed it: its fake shared dir was a real directory.)
+SHARED=$(readlink -f "$HOME/storage/shared" 2>/dev/null)
+[ -z "$SHARED" ] && SHARED="$HOME/storage/shared"
 ORIG_RETENTION_DAYS=7
 LABELED_DAYS=30
 PICK_MAX=50
 
 AUTO=0
 DRY_RUN=0
+FILTER=()
 
 # -- Helpers -------------------------------------------------------------------
 log()  { echo "[$(date '+%H:%M:%S')] $*"; }
@@ -60,8 +68,9 @@ warn() { echo -e "\033[33m!\033[0m $*"; }
 human() { numfmt --to=iec "$1" 2>/dev/null || echo "${1} bytes"; }
 
 usage() {
-    echo "Usage: clean-storage [--auto] [--dry-run] [--older-than N] [--help]"
+    echo "Usage: clean-storage [segment ...] [--auto] [--dry-run] [--older-than N] [--help]"
     echo "  (no flags)   report + stale originals + labeled pick-list"
+    echo "  segment      limit the run to one segment folder (repeatable)"
     echo "  --auto       totals + stale originals only (no dialogs, no labeled deletes)"
     echo "  --dry-run    report + show what would be deleted; delete nothing"
     echo "  --older-than N  labeled candidates older than N days (default $LABELED_DAYS)"
@@ -74,7 +83,8 @@ while [ $# -gt 0 ]; do
         --dry-run)    DRY_RUN=1; shift ;;
         --older-than) LABELED_DAYS="$2"; shift 2 ;;
         --help|-h)    usage ;;
-        *)            echo "Unknown option: $1"; usage ;;
+        --*)          echo "Unknown option: $1"; usage ;;
+        *)            FILTER+=("$1"); shift ;;
     esac
 done
 
@@ -88,19 +98,73 @@ fi
 
 # -- Segment folders -----------------------------------------------------------
 # Direct subdirs of shared storage, excluding hidden dirs and Export/
-# (the bball zip destination -- not a segment).
-SEGMENTS=()
+# (the bball zip destination -- not a segment). When segments_data.json is
+# readable, only folders named after a real segment are kept, so stock
+# Android dirs (DCIM, Download, Movies, ...) do not pollute the report;
+# when the JSON is missing or jq is unavailable, every non-hidden dir is
+# treated as a segment (the v4.4.24 behavior).
+ALL_DIRS=()
 while IFS= read -r -d '' d; do
     base=$(basename "$d")
     case "$base" in
         .*|Export) continue ;;
     esac
-    SEGMENTS+=("$d")
+    ALL_DIRS+=("$d")
 done < <(find "$SHARED" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+
+SEG_NAMES_LOWER=()
+DATA_JSON="$HOME/.shortcuts/.hidden/segments_data.json"
+if command -v jq >/dev/null 2>&1 && [ -f "$DATA_JSON" ]; then
+    while IFS= read -r _n; do
+        [ -n "$_n" ] && SEG_NAMES_LOWER+=("${_n,,}")
+    done < <(jq -r '.segments[]?.name // empty' "$DATA_JSON" 2>/dev/null)
+fi
+
+SEGMENTS=()
+for d in "${ALL_DIRS[@]}"; do
+    if [ "${#SEG_NAMES_LOWER[@]}" -gt 0 ]; then
+        _bl=$(basename "$d"); _bl="${_bl,,}"
+        _match=0
+        for _n in "${SEG_NAMES_LOWER[@]}"; do
+            [ "$_bl" = "$_n" ] && { _match=1; break; }
+        done
+        [ "$_match" = "0" ] && continue
+    fi
+    SEGMENTS+=("$d")
+done
 
 if [ "${#SEGMENTS[@]}" -eq 0 ]; then
     log "No segment folders found under $SHARED"
     exit 0
+fi
+
+# Positional segment filter: clean-storage climb grip
+# Matches folder basenames directly (case-insensitive), so it works even
+# for a folder whose name is not in segments_data.json.
+if [ "${#FILTER[@]}" -gt 0 ]; then
+    FILTERED=()
+    for want in "${FILTER[@]}"; do
+        wl="${want,,}"
+        found=0
+        for d in "${ALL_DIRS[@]}"; do
+            bd=$(basename "$d"); bd="${bd,,}"
+            if [ "$bd" = "$wl" ]; then
+                seen=0
+                for e in "${FILTERED[@]}"; do
+                    [ "$e" = "$d" ] && { seen=1; break; }
+                done
+                [ "$seen" = "0" ] && FILTERED+=("$d")
+                found=1
+            fi
+        done
+        if [ "$found" = "0" ]; then
+            fail "no segment folder named '$want' under $SHARED"
+            echo "  Available segments:"
+            for d in "${SEGMENTS[@]}"; do echo "    $(basename "$d")"; done
+            exit 1
+        fi
+    done
+    SEGMENTS=("${FILTERED[@]}")
 fi
 
 # -- Report: per-segment labeled + originals -----------------------------------
@@ -143,8 +207,11 @@ rm -f "$REPORT_TMP"
 # Same rule backup-all used: files in .burned_originals/ older than
 # ORIG_RETENTION_DAYS are deleted; emptied dirs are dropped.
 purge_originals() {
-    local total_files=0 total_bytes=0 d f sz
+    # args: search roots -- $SHARED for a full run, the selected segment
+    # dirs when a positional filter was given.
+    local total_files=0 total_bytes=0 d f sz root
     local listed=0
+    for root in "$@"; do
     while IFS= read -r -d '' d; do
         while IFS= read -r -d '' f; do
             sz=$(stat -c '%s' "$f" 2>/dev/null || echo 0)
@@ -160,7 +227,8 @@ purge_originals() {
             fi
         done < <(find "$d" -type f -mtime +"$ORIG_RETENTION_DAYS" -print0 2>/dev/null)
         [ "$DRY_RUN" = "0" ] && rmdir "$d" 2>/dev/null || true
-    done < <(find "$SHARED" -maxdepth 3 -type d -name '.burned_originals' -print0 2>/dev/null)
+    done < <(find "$root" -maxdepth 3 -type d -name '.burned_originals' -print0 2>/dev/null)
+    done
     if [ "$total_files" -gt 0 ]; then
         if [ "$DRY_RUN" = "1" ]; then
             [ "$total_files" -gt 20 ] && echo "    ... and $((total_files - 20)) more"
@@ -174,7 +242,11 @@ purge_originals() {
 }
 
 log "Purging stale burned originals (older than $ORIG_RETENTION_DAYS days)..."
-purge_originals
+if [ "${#FILTER[@]}" -gt 0 ]; then
+    purge_originals "${SEGMENTS[@]}"
+else
+    purge_originals "$SHARED"
+fi
 
 # -- Labeled: pick-list (interactive only, never in --auto) ----------------------
 if [ "$AUTO" = "1" ]; then
