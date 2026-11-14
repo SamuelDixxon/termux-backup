@@ -5,7 +5,7 @@
       "name": "climb",
       "short_desc": "rock climbing",
       "full_desc": "rock climbing",
-      "counter": 280,
+      "counter": 285,
       "hashtags": [
         "#boulder",
         "#climb",
@@ -125,7 +125,7 @@
       "name": "trixie",
       "short_desc": "cat adventures",
       "full_desc": "cat",
-      "counter": 12,
+      "counter": 15,
       "hashtags": [
         "#cat",
         "#trixie",
@@ -209,7 +209,7 @@
       "name": "ball",
       "short_desc": "basketball plays",
       "full_desc": "general basketball",
-      "counter": 78,
+      "counter": 81,
       "hashtags": [
         "#basketball",
         "#ball",
