@@ -2,7 +2,7 @@
 # SUMMARY: Reclaim phone storage: report per-segment sizes, auto-delete stale burned originals, pick labeled files to remove
 # GROUP: backup
 # =============================================================================
-# clean-storage  v4.4.27
+# clean-storage  v4.4.28
 # =============================================================================
 # PURPOSE:
 #   Storage cleanup for the clip workflow, decoupled from backup-all (which
@@ -22,7 +22,10 @@
 #      LABELED_DAYS (30) -- oldest first, capped at PICK_MAX (50) -- shown
 #      with the segment # parsed from the filename
 #      (<segment>_<NNNN>_<base>_labeled.<ext>). Only the files you pick
-#      are deleted. Never automatic.
+#      are deleted. Never automatic. And only files already archived in an
+#      Export/ zip are ever offered -- anything with no zip behind it is
+#      listed, never offered (v4.4.28: age alone used to qualify a file,
+#      and boxing videos with no zip were deleted on 2026-11-15).
 #
 # MODES:
 #   clean-storage                interactive: report + originals + labeled pick
@@ -41,6 +44,10 @@
 #     and anything else is never touched.
 #   - Labeled files are deleted ONLY when explicitly picked in the dialog
 #     (or typed by number at the fallback prompt). --auto never deletes them.
+#   - Labeled files are OFFERED only when already archived in an Export/
+#     zip (basename match across all zips in Export/). A file with no zip
+#     behind it is reported, never offered -- run bball first. If unzip
+#     is missing, nothing is offered at all (fail closed).
 #   - --dry-run deletes nothing; use it to preview any run.
 # =============================================================================
 
@@ -51,6 +58,7 @@
 # (The v4.4.24 VM test missed it: its fake shared dir was a real directory.)
 SHARED=$(readlink -f "$HOME/storage/shared" 2>/dev/null)
 [ -z "$SHARED" ] && SHARED="$HOME/storage/shared"
+EXPORT_DIR="$SHARED/Export"
 ORIG_RETENTION_DAYS=7
 LABELED_DAYS=30
 PICK_MAX=50
@@ -263,10 +271,51 @@ for d in "${SEGMENTS[@]}"; do
         echo "$mt|$sz|$f" >> "$CAND_TMP"
     done < <(find "$d" -maxdepth 1 -type f -mtime +"$LABELED_DAYS" \( -iname '*_labeled.mp4' -o -iname '*_labeled.mov' -o -iname '*_labeled.3gp' -o -iname '*_labeled.webm' -o -iname '*_labeled.mkv' \) -print0 2>/dev/null)
 done
-CAND_COUNT=$(wc -l < "$CAND_TMP" | tr -d ' ')
+
+# Safety guard (v4.4.28): only offer labeled files that are already archived
+# in an Export/ zip. The 30-day window assumed bball had run; on 2026-11-15
+# the pick-list deleted boxing videos that were in no zip at all, so age
+# alone no longer qualifies a file. A candidate counts as backed up if its
+# basename appears in ANY Export/ zip (bball merge is additive, so an old
+# zip still counts). Files with no zip behind them are listed, never
+# offered. Fail closed: if unzip is missing or Export/ is gone, nothing
+# is offered at all.
+KEPT_TMP=$(mktemp)
+UNBACKED_TMP=$(mktemp)
+BACKED_TMP=$(mktemp)
+if command -v unzip >/dev/null 2>&1 && [ -d "$EXPORT_DIR" ]; then
+    for z in "$EXPORT_DIR"/*.zip; do
+        [ -f "$z" ] || continue
+        unzip -Z1 "$z" 2>/dev/null | while IFS= read -r _entry; do
+            [ -n "$_entry" ] && basename "$_entry"
+        done >> "$BACKED_TMP"
+    done
+    sort -u "$BACKED_TMP" -o "$BACKED_TMP"
+    while IFS='|' read -r _mt _sz _f; do
+        if grep -qxF "$(basename "$_f")" "$BACKED_TMP" 2>/dev/null; then
+            echo "$_mt|$_sz|$_f" >> "$KEPT_TMP"
+        else
+            echo "$_mt|$_sz|$_f" >> "$UNBACKED_TMP"
+        fi
+    done < "$CAND_TMP"
+else
+    [ -d "$EXPORT_DIR" ] || warn "Export/ not found -- cannot verify backups, no labeled files offered"
+    command -v unzip >/dev/null 2>&1 || warn "unzip not found -- cannot verify backups, no labeled files offered (pkg install unzip)"
+    cat "$CAND_TMP" > "$UNBACKED_TMP"
+fi
+rm -f "$CAND_TMP" "$BACKED_TMP"
+
+CAND_COUNT=$(wc -l < "$KEPT_TMP" | tr -d ' ')
+UNBACKED_COUNT=$(wc -l < "$UNBACKED_TMP" | tr -d ' ')
+if [ "$UNBACKED_COUNT" -gt 0 ]; then
+    warn "$UNBACKED_COUNT labeled file(s) older than $LABELED_DAYS days are NOT in any Export/ zip -- run bball first, then re-run clean-storage"
+    while IFS='|' read -r _mt _sz _f; do
+        echo "    not backed up: $_f"
+    done < "$UNBACKED_TMP"
+fi
 if [ "$CAND_COUNT" = "0" ]; then
-    log "No labeled files older than $LABELED_DAYS days -- nothing to pick"
-    rm -f "$CAND_TMP"
+    [ "$UNBACKED_COUNT" = "0" ] && log "No labeled files older than $LABELED_DAYS days -- nothing to pick"
+    rm -f "$KEPT_TMP" "$UNBACKED_TMP"
     exit 0
 fi
 [ "$CAND_COUNT" -gt "$PICK_MAX" ] && warn "Showing the $PICK_MAX oldest of $CAND_COUNT candidates -- re-run to see the next batch"
@@ -295,8 +344,8 @@ while IFS='|' read -r mt sz f; do
     fi
     CAND_PATHS+=("$f")
     CAND_LABELS+=("$label")
-done < <(sort -t'|' -k1,1n "$CAND_TMP")
-rm -f "$CAND_TMP"
+done < <(sort -t'|' -k1,1n "$KEPT_TMP")
+rm -f "$KEPT_TMP" "$UNBACKED_TMP"
 
 if [ "$DRY_RUN" = "1" ]; then
     echo "Labeled candidates (dry run -- nothing will be deleted):"
