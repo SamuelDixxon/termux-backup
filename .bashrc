@@ -164,6 +164,7 @@ alias rssi='termux-wifi-connectioninfo | jq -r ".rssi"'
 alias pipeline='bash $HOME/.shortcuts/content-pipeline'
 alias bb='bash $HOME/.shortcuts/batch-backup'
 alias bball='bash $HOME/.shortcuts/batch-backup --all'
+alias zipall='bash $HOME/.shortcuts/batch-backup --all'  # v4.4.30: clearer name for bball; both work
 alias bbhot='bash $HOME/.shortcuts/batch-backup --hot'
 alias bbunzipped='bash $HOME/.shortcuts/batch-backup --unzipped'
 alias mgr='python3 $HOME/.shortcuts/.hidden/segment_manager.py'
