@@ -25,6 +25,7 @@ root cause so the next person doesn't pay the same tuition.
 | Grid cell size hardcoded (480x270) | Output resolution had no relationship to `--cols` or how it'd be viewed -- grid never filled a phone screen | Cell size now derived from a configurable target resolution (default 1080x1920 vertical); a trailing `scale` filter forces the exact target regardless of integer-division rounding |
 | `--help` as first argument | Swallowed as the segment name instead of showing help, in both `tapestry` and `sandwich` | Checked for `--help`/`-h` across all args before `$1` is ever assigned to `SEGMENT` |
 | Malformed `--max`/`--timeout` values | `head -` (invalid) or silent bad state | Guarded, falls back to defaults with a warning |
+| `find` on a symlinked scan root (`clean-storage`) | Report, purge, and pick-list all saw zero segment folders on the phone despite folders existing -- GNU `find` does not descend into a symlinked starting point, and `~/storage/shared` is a symlink (`termux-setup-storage` -> `/storage/emulated/0`) | Resolve the scan root once with `readlink -f` before any `find`; the VM test fixture now mirrors the phone with shared storage as a symlink, not a real directory (the first fixture hid the bug entirely) |
 
 ## Conventions earned the hard way
 
@@ -32,5 +33,7 @@ root cause so the next person doesn't pay the same tuition.
 - `-nostdin` on every ffmpeg invocation. Always.
 - `while [ $# -gt 0 ]`, never `for arg in "$@"` + `shift`.
 - Exclude dotfiles in every `find` over shared storage.
+- Resolve symlinked scan roots with `readlink -f` before `find` -- a test
+  fixture built from a real directory hid this bug entirely.
 - New bugs go in the table above with symptom → root cause → fix. Future-you
   (and future collaborators) will thank present-you.

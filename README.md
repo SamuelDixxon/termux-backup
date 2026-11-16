@@ -83,6 +83,37 @@ structurally impossible rather than resolved after the fact:
   with the higher episode counter winning; anything else refuses and asks
   a human.
 
+## Storage cleanup
+
+Burning a label keeps the original clip in `<segment>/.burned_originals/`
+as insurance, and originals pile up fast -- on 2026-11-15 the phone held
+2.7 GB across 15 segment folders, 2.2 GB of it originals. `clean-storage`
+is the standalone tool that reclaims it (no git, no network, so it works
+even when a backup can't run):
+
+- **Report** -- per-segment labeled + originals counts and sizes, biggest
+  first. Only folders named after a real segment in `segments_data.json`
+  are listed, so stock Android dirs (DCIM, Download, ...) stay out.
+- **Originals** -- files in `.burned_originals/` older than 7 days are
+  auto-deleted, no prompt (the labeled copy is what gets archived, so the
+  original is redundant insurance past that window). Emptied dirs drop.
+- **Labeled** -- files older than 30 days are offered in a pick-list,
+  oldest first, showing the episode number parsed from the filename.
+  Only what you pick is deleted. Labeled files are never auto-deleted.
+
+```bash
+clean-storage --dry-run        # preview: report + what would be deleted
+clean-storage                  # report + purge + pick-list
+clean-storage climb grip       # limit the run to those segments
+clean-storage --auto           # totals + originals only; what backup-all calls
+```
+
+One bug worth knowing: `~/storage/shared` is a symlink on Termux, and GNU
+`find` does not descend into a symlinked starting point, so the first
+version reported zero folders on the phone. The scan root is resolved
+with `readlink -f` before any `find` runs
+([docs/debugging.md](docs/debugging.md)).
+
 ## Tools
 
 Everything lives in `.shortcuts/` (Termux:Widget-ready) and self-describes
@@ -94,7 +125,7 @@ mentions what's new since your last session.
 
 **Media** — `org-camera-album` (move DCIM/Camera into a new folder) · `org-media` (organize Camera/Screenshots/Downloads/Edits with filters + dry-run; no-arg = original behavior) · `org-camera-album-burn.sh` (organize into a segment + burn sequential thumbnails) · `burn_thumb.sh` (burn text labels onto video) · `tapestry` (NxN clip grid) · `sandwich` (stitch clips into one reel) · `video-utils.sh` (shared ffmpeg helpers)
 
-**Backup & sync** — `backup-all` (mirror to git repo: rebase-before-push, counter-safe) · `sync-in` (pull repo, mirror scripts, update .bashrc) · `merge-counters` (auto-resolve counter conflicts, max wins) · `backup-folder` (dialog-driven zip to Export/) · `batch-backup` (zip segment folders, 4 modes) · `transfer-export` (Export/ → SD card or Raspberry Pi)
+**Backup & sync** — `backup-all` (mirror to git repo: rebase-before-push, counter-safe) · `sync-in` (pull repo, mirror scripts, update .bashrc) · `merge-counters` (auto-resolve counter conflicts, max wins) · `backup-folder` (dialog-driven zip to Export/) · `batch-backup` (zip segment folders, 4 modes) · `transfer-export` (Export/ → SD card or Raspberry Pi) · `clean-storage` (per-segment storage report, auto-purge stale burned originals, labeled pick-list)
 
 **Content** — `pistol_squat_log.sh` (log a session, copy summary) · `week-recap` (title + description for a week's bundle)
 
