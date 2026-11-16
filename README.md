@@ -100,6 +100,8 @@ even when a backup can't run):
 - **Labeled** -- files older than 30 days are offered in a pick-list,
   oldest first, showing the episode number parsed from the filename.
   Only what you pick is deleted. Labeled files are never auto-deleted.
+  Only files already in an Export/ zip are offered; anything else is
+  listed as not backed up, never offered.
 
 ```bash
 clean-storage --dry-run        # preview: report + what would be deleted

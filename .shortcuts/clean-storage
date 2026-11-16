@@ -2,7 +2,7 @@
 # SUMMARY: Reclaim phone storage: report per-segment sizes, auto-delete stale burned originals, pick labeled files to remove
 # GROUP: backup
 # =============================================================================
-# clean-storage  v4.4.28
+# clean-storage  v4.4.29
 # =============================================================================
 # PURPOSE:
 #   Storage cleanup for the clip workflow, decoupled from backup-all (which
@@ -46,8 +46,9 @@
 #     (or typed by number at the fallback prompt). --auto never deletes them.
 #   - Labeled files are OFFERED only when already archived in an Export/
 #     zip (basename match across all zips in Export/). A file with no zip
-#     behind it is reported, never offered -- run bball first. If unzip
-#     is missing, nothing is offered at all (fail closed).
+#     behind it is reported, never offered -- the message names the segment
+#     and its own zip command (zb <segment>). If unzip is missing, nothing
+#     is offered at all (fail closed).
 #   - --dry-run deletes nothing; use it to preview any run.
 # =============================================================================
 
@@ -308,10 +309,17 @@ rm -f "$CAND_TMP" "$BACKED_TMP"
 CAND_COUNT=$(wc -l < "$KEPT_TMP" | tr -d ' ')
 UNBACKED_COUNT=$(wc -l < "$UNBACKED_TMP" | tr -d ' ')
 if [ "$UNBACKED_COUNT" -gt 0 ]; then
-    warn "$UNBACKED_COUNT labeled file(s) older than $LABELED_DAYS days are NOT in any Export/ zip -- run bball first, then re-run clean-storage"
+    warn "$UNBACKED_COUNT labeled file(s) older than $LABELED_DAYS days are NOT in any Export/ zip -- zip the segment first, then re-run clean-storage"
     while IFS='|' read -r _mt _sz _f; do
         echo "    not backed up: $_f"
     done < "$UNBACKED_TMP"
+    # Name the segment and its own zip command -- zipping every segment
+    # (bball) is overkill when one segment's files are unbacked-up.
+    while IFS='|' read -r _mt _sz _f; do
+        basename "$(dirname "$_f")"
+    done < "$UNBACKED_TMP" | sort | uniq -c | while read -r _n _seg; do
+        echo "    $_seg: $_n file(s) not backed up -- run zb '$_seg' first"
+    done
 fi
 if [ "$CAND_COUNT" = "0" ]; then
     [ "$UNBACKED_COUNT" = "0" ] && log "No labeled files older than $LABELED_DAYS days -- nothing to pick"
