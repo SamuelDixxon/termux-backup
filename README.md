@@ -127,7 +127,7 @@ mentions what's new since your last session.
 
 **Media** — `org-camera-album` (move DCIM/Camera into a new folder) · `org-media` (organize Camera/Screenshots/Downloads/Edits with filters + dry-run; no-arg = original behavior) · `org-camera-album-burn.sh` (organize into a segment + burn sequential thumbnails) · `burn_thumb.sh` (burn text labels onto video) · `tapestry` (NxN clip grid) · `sandwich` (stitch clips into one reel) · `video-utils.sh` (shared ffmpeg helpers)
 
-**Backup & sync** — `backup-all` (mirror to git repo: rebase-before-push, counter-safe) · `sync-in` (pull repo, mirror scripts, update .bashrc) · `merge-counters` (auto-resolve counter conflicts, max wins) · `backup-folder` (dialog-driven zip to Export/) · `batch-backup` (zip segment folders, 4 modes) · `transfer-export` (Export/ → SD card or Raspberry Pi) · `clean-storage` (per-segment storage report, auto-purge stale burned originals, labeled pick-list)
+**Backup & sync** — `backup-all` (mirror to git repo: rebase-before-push, counter-safe) · `sync-in` (pull repo, mirror scripts, update .bashrc) · `merge-counters` (auto-resolve counter conflicts, max wins) · `backup-folder` (dialog-driven zip to Export/) · `batch-backup` (zip segment folders, 4 modes) · `transfer-export` (Export/ → SD card or Raspberry Pi) · `pi-check` (diagnose the phone → Pi SSH path, patch transfer-export, prove one transfer) · `clean-storage` (per-segment storage report, auto-purge stale burned originals, labeled pick-list)
 
 **Content** — `pistol_squat_log.sh` (log a session, copy summary) · `week-recap` (title + description for a week's bundle)
 

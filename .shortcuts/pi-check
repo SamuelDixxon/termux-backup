@@ -1,0 +1,253 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# SUMMARY: Diagnose the phone -> Raspberry Pi SSH path step by step, patch transfer-export, test one transfer
+# GROUP: backup
+# =============================================================================
+# pi-check  v4.4.31  (built 2026-11-16, deployed 2026-11-20)
+# =============================================================================
+# PURPOSE:
+#   The one-time Pi setup from Sep 28 is still the blocker for wireless
+#   backup: SSH on the Pi, its LAN address, the phone's key on the Pi, and
+#   the placeholder 192.168.1.100 in transfer-export's CONFIG. This script
+#   walks those steps in order from the phone, stops at the first failure
+#   with the exact fix, and -- once the path works -- patches the real IP
+#   into transfer-export and proves it with one small transfer whose
+#   SHA-256 is compared on both ends (the F0 gate from coral-pi-specs.md).
+#
+#   It never deletes anything. The only file it edits is transfer-export,
+#   and only after a backup copy (transfer-export.bak) is made.
+#
+# USAGE:
+#   pi-check                  ask for the Pi IP, run the checks
+#   pi-check 192.168.1.42     use this IP (skip the prompt)
+#   pi-check --dry-run        checks only: no patch, no test transfer
+#   pi-check --transfer       after the checks pass, patch the IP and send
+#                             one test file with a SHA-256 check
+#   pi-check --user pi        Pi username (default: sam, from
+#                             transfer-export's CONFIG when it can be read)
+#   pi-check --help
+#
+# STEPS (stops at the first failure):
+#   0. Tools present: ping, ssh, rsync, ssh-keygen, sha256sum
+#   1. Ping the Pi (same WiFi? guest networks usually isolate clients)
+#   2. SSH reachable + key auth already working?
+#   3. Password login once, then install the phone's Ed25519 key so
+#      later runs (and scripts) are passwordless
+#   4. (--transfer) Patch PI_IP in ~/.shortcuts/transfer-export
+#   5. (--transfer) rsync one small Export/ zip to ~/pi-check-test/
+#      on the Pi and compare SHA-256 on both ends
+#
+# NOTES:
+#   - Get the Pi IP on the Pi with: hostname -I
+#     (or enable SSH first: sudo systemctl enable --now ssh)
+#   - If your router reassigns the Pi's address, set a DHCP reservation
+#     for it later; this script does not do that part.
+#   - The nightly job wiring (bball + transfer-export) is a separate
+#     step: bball's merge/append/skip prompt needs a non-interactive
+#     answer first. This script only proves the transfer path.
+# =============================================================================
+
+set -u
+VERSION="v4.4.31"
+
+PI_IP="${PI_IP:-}"
+PI_USER="${PI_USER:-sam}"
+DRY_RUN=0
+DO_TRANSFER=0
+TRANSFER_SCRIPT="$HOME/.shortcuts/transfer-export"
+
+log()  { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
+ok()   { printf '  ok: %s\n' "$*"; }
+fail() { printf 'FAIL: %s\n' "$*"; }
+hint() { printf '  -> %s\n' "$*"; }
+
+usage() {
+  sed -n '2,/^set -u$/p' "$0" | grep -v '^set -u$' | sed 's/^# \?//'
+  echo "Usage: pi-check [IP] [--user NAME] [--dry-run] [--transfer] [--help]"
+}
+
+# --- args -------------------------------------------------------------------
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h) usage; exit 0 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --transfer) DO_TRANSFER=1; shift ;;
+    --user) PI_USER="${2:-}"; [ -n "$PI_USER" ] || { fail "--user needs a name"; exit 2; }; shift 2 ;;
+    --ip) PI_IP="${2:-}"; [ -n "$PI_IP" ] || { fail "--ip needs an address"; exit 2; }; shift 2 ;;
+    --*) fail "Unknown option: $1"; usage; exit 2 ;;
+    *)  if [ -z "$PI_IP" ]; then PI_IP="$1"; shift; else fail "Extra argument: $1"; exit 2; fi ;;
+  esac
+done
+
+# --- ask for the IP when not given -------------------------------------------
+if [ -z "$PI_IP" ]; then
+  if command -v termux-dialog >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    PI_IP=$(termux-dialog text -t "Pi IP address" -i "192.168.1." 2>/dev/null | jq -r '.text // empty')
+  else
+    printf 'Pi IP address (on the Pi: hostname -I): '
+    read -r PI_IP
+  fi
+fi
+if [ -z "$PI_IP" ]; then fail "No Pi IP given."; exit 2; fi
+# 192.168.1.100 is the placeholder, not a real Pi -- refuse it outright.
+if [ "$PI_IP" = "192.168.1.100" ]; then
+  fail "192.168.1.100 is the placeholder in transfer-export, not your Pi."
+  hint "On the Pi, run: hostname -I  (and first: sudo systemctl enable --now ssh)"
+  exit 2
+fi
+# Read the username from transfer-export's CONFIG when it is there.
+if [ -f "$TRANSFER_SCRIPT" ]; then
+  CFG_USER=$(grep -E '^PI_USER=' "$TRANSFER_SCRIPT" | head -n 1 | cut -d'"' -f2)
+  [ -n "$CFG_USER" ] && PI_USER="$CFG_USER"
+fi
+TARGET="$PI_USER@$PI_IP"
+log "pi-check $VERSION -- target $TARGET"
+
+# --- step 0: tools ------------------------------------------------------------
+log "Step 0: tools"
+MISSING=""
+for t in ping ssh rsync ssh-keygen sha256sum; do
+  command -v "$t" >/dev/null 2>&1 || MISSING="$MISSING $t"
+done
+if [ -n "$MISSING" ]; then
+  fail "Missing:$MISSING"
+  hint "Install them: pkg install openssh rsync"
+  hint "(sha256sum ships with Termux coreutils; if it is missing, pkg install coreutils)"
+  exit 1
+fi
+ok "ping, ssh, rsync, ssh-keygen, sha256sum present"
+
+# --- step 1: ping -------------------------------------------------------------
+log "Step 1: ping $PI_IP"
+if ping -c 3 -W 2 "$PI_IP" >/dev/null 2>&1; then
+  ok "Pi answers ping"
+else
+  fail "No ping reply from $PI_IP"
+  hint "Phone and Pi must be on the same WiFi (not a guest network -- those usually block device-to-device traffic)."
+  hint "On the Pi, check it is on WiFi and its address is still $PI_IP: ip a"
+  hint "If the Pi is off or on ethernet with a different subnet, fix that first, then re-run pi-check."
+  exit 1
+fi
+
+# --- step 2: is key auth already working? ------------------------------------
+log "Step 2: SSH + key auth"
+if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "$TARGET" 'echo ok' 2>/dev/null | grep -q ok; then
+  ok "Passwordless SSH already works"
+  KEY_OK=1
+else
+  KEY_OK=0
+  # Distinguish "cannot connect" from "connected, auth failed".
+  if ! ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "$TARGET" 'true' 2>/dev/null; then
+    SSH_ERR=$(ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "$TARGET" 'true' 2>&1 | head -n 1)
+    case "$SSH_ERR" in
+      *"Connection refused"*)
+        fail "SSH connection refused by $PI_IP"
+        hint "sshd is not running on the Pi. On the Pi: sudo systemctl enable --now ssh"
+        hint "Then check: sudo systemctl status ssh"
+        ;;
+      *"timed out"*|*"Connection timed out"*)
+        fail "SSH timed out reaching $PI_IP"
+        hint "Ping works but port 22 does not answer -- firewall on the Pi, or the wrong host."
+        hint "On the Pi: sudo ufw allow ssh   (only if ufw is on)"
+        ;;
+      *)
+        fail "SSH failed: $SSH_ERR"
+        hint "Ping works, SSH does not. On the Pi: sudo systemctl status ssh"
+        ;;
+    esac
+    exit 1
+  fi
+  log "SSH answers, but no key auth yet -- one password login to install the key"
+fi
+
+# --- step 3: install the key --------------------------------------------------
+if [ "$KEY_OK" = "0" ]; then
+  log "Step 3: key auth"
+  if [ ! -f "$HOME/.ssh/id_ed25519" ]; then
+    log "No phone key yet -- creating one (no passphrase, so scripts can use it)"
+    mkdir -p "$HOME/.ssh"
+    ssh-keygen -t ed25519 -f "$HOME/.ssh/id_ed25519" -N "" || { fail "ssh-keygen failed"; exit 1; }
+    ok "Created ~/.ssh/id_ed25519"
+  else
+    ok "Phone key already exists: ~/.ssh/id_ed25519"
+  fi
+  log "Copying the key to the Pi (you will type the Pi password once):"
+  if ssh-copy-id -o ConnectTimeout=5 "$TARGET" 2>/dev/null; then
+    ok "Key copied"
+  else
+    # ssh-copy-id is not always present; fall back to a plain append.
+    hint "ssh-copy-id failed -- trying the manual append instead"
+    if cat "$HOME/.ssh/id_ed25519.pub" | ssh -o ConnectTimeout=5 "$TARGET" 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'; then
+      ok "Key appended to ~/.ssh/authorized_keys on the Pi"
+    else
+      fail "Could not install the key (password login failed?)"
+      hint "Check the Pi password, then re-run pi-check."
+      exit 1
+    fi
+  fi
+  if ssh -o BatchMode=yes -o ConnectTimeout=5 "$TARGET" 'echo ok' 2>/dev/null | grep -q ok; then
+    ok "Passwordless SSH now works"
+  else
+    fail "Key installed but passwordless login still prompts"
+    hint "Usual suspect: permissions on the Pi. On the Pi: chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
+    exit 1
+  fi
+fi
+
+# --- stop here unless --transfer ----------------------------------------------
+if [ "$DRY_RUN" = "1" ] || [ "$DO_TRANSFER" = "0" ]; then
+  log "Checks passed. Nothing patched, nothing transferred."
+  hint "Next: pi-check $PI_IP --transfer   (patches transfer-export and proves one transfer with a SHA-256 check)"
+  exit 0
+fi
+
+# --- step 4: patch transfer-export --------------------------------------------
+log "Step 4: patch PI_IP in transfer-export"
+if [ ! -f "$TRANSFER_SCRIPT" ]; then
+  fail "transfer-export not found at $TRANSFER_SCRIPT"
+  hint "Run sync-in first so the repo scripts land on the phone, then re-run pi-check --transfer."
+  exit 1
+fi
+CURRENT_IP=$(grep -E '^PI_IP=' "$TRANSFER_SCRIPT" | head -n 1 | cut -d'"' -f2)
+if [ "$CURRENT_IP" = "$PI_IP" ]; then
+  ok "transfer-export already points at $PI_IP"
+else
+  cp "$TRANSFER_SCRIPT" "$TRANSFER_SCRIPT.bak" || { fail "Could not back up transfer-export"; exit 1; }
+  if sed -i "s|^PI_IP=.*|PI_IP=\"$PI_IP\"|" "$TRANSFER_SCRIPT" && grep -q "^PI_IP=\"$PI_IP\"$" "$TRANSFER_SCRIPT"; then
+    ok "PI_IP set to $PI_IP (was ${CURRENT_IP:-unset}; backup at transfer-export.bak)"
+  else
+    fail "Patch did not take -- restoring the backup"
+    cp "$TRANSFER_SCRIPT.bak" "$TRANSFER_SCRIPT"
+    exit 1
+  fi
+fi
+
+# --- step 5: one test transfer with a SHA check -------------------------------
+log "Step 5: test transfer (one small Export/ zip, SHA-256 both ends)"
+EXPORT_DIR="$HOME/storage/shared/Export"
+TEST_FILE=$(ls -S "$EXPORT_DIR"/*.zip 2>/dev/null | head -n 1)
+if [ -z "$TEST_FILE" ]; then
+  # No zip yet: send a tiny probe file instead so the path is still proven.
+  TEST_FILE="$HOME/.shortcuts/.hidden/pi-check-probe.txt"
+  mkdir -p "$(dirname "$TEST_FILE")"
+  echo "pi-check probe $(date -u +%FT%TZ)" > "$TEST_FILE"
+  hint "No Export/ zip found -- sending a tiny probe file instead (run bball / zb first for a real zip)"
+fi
+LOCAL_SHA=$(sha256sum "$TEST_FILE" | cut -d' ' -f1)
+BASE=$(basename "$TEST_FILE")
+if rsync -avz --progress "$TEST_FILE" "$TARGET:~/pi-check-test/" 2>&1 | tail -n 3; then
+  REMOTE_SHA=$(ssh -o BatchMode=yes -o ConnectTimeout=5 "$TARGET" "sha256sum ~/pi-check-test/$BASE" 2>/dev/null | cut -d' ' -f1)
+  if [ -n "$REMOTE_SHA" ] && [ "$LOCAL_SHA" = "$REMOTE_SHA" ]; then
+    ok "SHA-256 matches: $LOCAL_SHA"
+    log "F0 PROVEN: $BASE landed on the Pi intact."
+    hint "Next: run transfer-export to send the real zips, then the nightly wiring (bball + transfer-export) is the remaining step."
+    exit 0
+  else
+    fail "SHA mismatch (local $LOCAL_SHA, remote ${REMOTE_SHA:-none})"
+    hint "The file arrived damaged or not at all -- do not trust this path yet. Re-run pi-check --transfer."
+    exit 1
+  fi
+else
+  fail "rsync to the Pi failed"
+  hint "SSH works but the transfer did not -- check disk space on the Pi: ssh $TARGET 'df -h ~'"
+  exit 1
+fi
