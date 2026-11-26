@@ -155,7 +155,7 @@ if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$BRANCH")" ]; then
     else
         # Rebase stopped on conflicts -- keep auto-resolving counter-only
         # conflicts until the rebase finishes or something else blocks it.
-        while bash "$REPO/.shortcuts/merge-counters" --auto; do
+        while bash "$REPO/.shortcuts/.lib/merge-counters" --auto; do
             if [ ! -d "$REPO/.git/rebase-merge" ] && [ ! -d "$REPO/.git/rebase-apply" ]; then
                 rebase_ok=1
                 break
@@ -168,7 +168,7 @@ if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$BRANCH")" ]; then
         git rebase --abort 2>/dev/null
         fail "Rebase hit conflicts backup-all can't auto-resolve -- nothing was pushed."
         echo "  cd $REPO && git pull --rebase   # resolve by hand, then re-run syncup"
-        echo "  (counters alone? bash ~/.shortcuts/merge-counters, then git rebase --continue)"
+        echo "  (counters alone? bash ~/.shortcuts/.lib/merge-counters, then git rebase --continue)"
         exit 1
     fi
 else

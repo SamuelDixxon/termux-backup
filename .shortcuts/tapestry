@@ -36,18 +36,19 @@
 #   ~/storage/shared/Export/<segment>_tapestry_grid_<timestamp>.mp4
 #
 # INSTALL:
-#   cp tapestry video-utils.sh ~/.shortcuts/
+#   cp tapestry ~/.shortcuts/
+#   cp video-utils.sh ~/.shortcuts/.lib/
 #   chmod +x ~/.shortcuts/tapestry
-#   (video-utils.sh must sit next to this script -- it's sourced, not run)
+#   (video-utils.sh lives in .lib/ beside this script -- it's sourced, not run)
 #
 # DEPENDENCIES:
 #   pkg install ffmpeg coreutils
 # =============================================================================
 
 SCRIPT_DIR="$(dirname "$0")"
-# shellcheck source=video-utils.sh
-if ! source "$SCRIPT_DIR/video-utils.sh" 2>/dev/null; then
-    echo "x video-utils.sh not found next to this script ($SCRIPT_DIR) -- copy it in from the repo"
+# shellcheck source=.lib/video-utils.sh
+if ! source "$SCRIPT_DIR/.lib/video-utils.sh" 2>/dev/null; then
+    echo "x video-utils.sh not found in $SCRIPT_DIR/.lib -- copy it in from the repo"
     exit 1
 fi
 
