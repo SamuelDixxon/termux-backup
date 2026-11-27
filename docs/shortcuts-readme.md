@@ -17,7 +17,7 @@ Unlike standard backups, this system uses `rsync --delete` to enforce a bidirect
 * **backup-all**: Enforces a 1:1 mirror from the device system to the Cloud. Captures additions, edits, and deletions.
 * **sync-in**: Forces the device to match the Cloud exactly. Wipes local "junk" scripts and updates environment variables.
 * **manager**: A Python-based CRUD interface for the Content Segment database.
-* **org-camera-album**: Automates the movement and gallery-refreshing of raw media files.
+* **org-camera-album**: Automates the movement and gallery-refreshing of raw media files (thin wrapper for org-media --camera-album since v4.4.33).
 * **iir-log**: A background service logging detailed battery telemetry to CSV.
 
 ### Data Engine (.hidden/)
@@ -49,7 +49,7 @@ Unlike standard backups, this system uses `rsync --delete` to enforce a bidirect
 * **backup-all**: Enforces a 1:1 mirror from the device system to the Cloud. Captures additions, edits, and deletions.
 * **sync-in**: Forces the device to match the Cloud exactly. Wipes local "junk" scripts and updates environment variables.
 * **manager**: A Python-based CRUD interface for the Content Segment database.
-* **org-camera-album**: Automates the movement and gallery-refreshing of raw media files.
+* **org-camera-album**: Automates the movement and gallery-refreshing of raw media files (thin wrapper for org-media --camera-album since v4.4.33).
 * **iir-log**: A background service logging detailed battery telemetry to CSV.
 
 ### Data Engine (.hidden/)
@@ -81,7 +81,7 @@ Unlike standard backups, this system uses `rsync --delete` to enforce a bidirect
 * **backup-all**: Enforces a 1:1 mirror from the device system to the Cloud. Captures additions, edits, and deletions.
 * **sync-in**: Forces the device to match the Cloud exactly. Wipes local "junk" scripts and updates environment variables.
 * **manager**: A Python-based CRUD interface for the Content Segment database.
-* **org-camera-album**: Automates the movement and gallery-refreshing of raw media files.
+* **org-camera-album**: Automates the movement and gallery-refreshing of raw media files (thin wrapper for org-media --camera-album since v4.4.33).
 * **iir-log**: A background service logging detailed battery telemetry to CSV.
 
 ### Data Engine (.hidden/)

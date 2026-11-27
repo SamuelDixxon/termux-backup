@@ -176,6 +176,11 @@ unconditionally. Exit code 127 = zip binary not in PATH -- fix: `pkg install zip
 
 ## org-camera-album
 
+**Retired in v4.4.33:** org-camera-album is now a thin wrapper exec'ing
+`org-media --camera-album` (Camera+Edits, new-folder prompt, no confirm).
+The description below documents the original standalone implementation;
+the user-visible flow is unchanged.
+
 **Corrected this pass.** The previous version of this doc described a
 smart radio-dialog router (hot segments sorted to the top, one-tap
 routing, marked "tested" in the changelog). Once the actual script was

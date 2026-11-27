@@ -1,6 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # =============================================================================
 # org-media — generalized media organizer (extends org-camera-album)
+# (v4.4.33: org-camera-album is retired into this script; its filename is
+#  now a thin wrapper for the --camera-album mode below.)
 # =============================================================================
 # SUMMARY: Move photos/videos from Camera, Edits, Muse, Screenshots...
 # GROUP: media
@@ -15,6 +17,8 @@
 # dry-run preview + confirmation step, unless --yes):
 #   --source camera|screenshots|downloads|edits|muse|<path>[,...]
 #              (comma-separated = multi-source, e.g. --source camera,edits)
+#   --camera-album                (org-camera-album mode: Camera+Edits, prompt
+#                                  for a NEW folder, no confirmation dialog)
 #   --dest <name|path>            (default: prompt for NEW folder, like the original)
 #   --type photos|videos|all      (default: all)
 #   --older-than N                (days; default: no age filter)
@@ -28,6 +32,7 @@
 # Examples:
 #   org-media                                # sweep Camera+Edits+Muse+Screenshots
 #   org-media --source camera                # strict original (Camera only)
+#   org-media --camera-album               # the retired org-camera-album flow
 #   org-media --source camera,edits --dest shoot_may --yes
 #   org-media --source screenshots --dest screenshots --dated --yes
 #   org-media --source downloads --older-than 7 --dry-run
@@ -74,11 +79,12 @@ usage() {
 
 # --- arg parsing -------------------------------------------------------------
 SOURCE_ARG="" DEST_ARG="" TYPE="all" OLDER_THAN="" MATCH=""
-DATED=0 DRY_RUN=0 YES=0 INTERACTIVE=0 PURE_DEFAULT=1
+DATED=0 DRY_RUN=0 YES=0 INTERACTIVE=0 PURE_DEFAULT=1 CAMERA_ALBUM=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --source)     SOURCE_ARG="$2"; PURE_DEFAULT=0; shift 2 ;;
+        --camera-album) SOURCE_ARG="camera,edits"; CAMERA_ALBUM=1; shift ;;
         --dest)       DEST_ARG="$2";   PURE_DEFAULT=0; shift 2 ;;
         --type)       TYPE="$2";       PURE_DEFAULT=0; shift 2 ;;
         --older-than) OLDER_THAN="$2"; PURE_DEFAULT=0; shift 2 ;;
@@ -335,7 +341,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
     exit 0
 fi
 
-if [ "$PURE_DEFAULT" -eq 0 ] && [ "$YES" -eq 0 ]; then
+if [ "$PURE_DEFAULT" -eq 0 ] && [ "$YES" -eq 0 ] && [ "$CAMERA_ALBUM" -ne 1 ]; then
     ans=$(dlg_confirm "Move $COUNT files ($HUMAN_SIZE)?" "${SRC_KEYS[*]} -> $DEST_PATH")
     if [ "$ans" != "yes" ]; then
         echo "Cancelled. Nothing moved."
